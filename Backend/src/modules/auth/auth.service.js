@@ -2,10 +2,14 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("./auth.model");
 
+/**
+ * Generate JWT Token
+ */
 const generateToken = (user) => {
   return jwt.sign(
     {
       id: user._id,
+      email: user.email,
       role: user.role
     },
     process.env.JWT_SECRET,
@@ -13,28 +17,78 @@ const generateToken = (user) => {
   );
 };
 
+/**
+ * Register User
+ */
 exports.registerUser = async (data) => {
-  const existing = await User.findOne({ email: data.email });
-  if (existing) throw new Error("User already exists");
+  try {
+    const email = data.email.toLowerCase();
 
-  const hashedPassword = await bcrypt.hash(data.password, 10);
+    // check existing user
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      throw new Error("User already exists with this email");
+    }
 
-  const user = await User.create({
-    ...data,
-    password: hashedPassword
-  });
+    // hash password
+    const hashedPassword = await bcrypt.hash(data.password, 10);
 
-  return user;
+    // create user
+    const user = await User.create({
+      name: data.name,
+      email: email,
+      password: hashedPassword,
+      role: data.role || "user"
+    });
+
+    // remove password from response
+    const userObj = user.toObject();
+    delete userObj.password;
+
+    return {
+      message: "User registered successfully",
+      user: userObj
+    };
+  } catch (error) {
+    throw error;
+  }
 };
 
+/**
+ * Login User
+ */
 exports.loginUser = async (email, password) => {
-  const user = await User.findOne({ email });
-  if (!user) throw new Error("Invalid credentials");
+  try {
+    const normalizedEmail = email.toLowerCase();
 
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) throw new Error("Invalid credentials");
+    // find user
+    const user = await User.findOne({ email: normalizedEmail });
 
-  const token = generateToken(user);
+    if (!user) {
+      throw new Error("Invalid email or password");
+    }
 
-  return { user, token };
+    // compare password
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      throw new Error("Invalid email or password");
+    }
+
+    // generate token
+    const token = generateToken(user);
+
+    // remove password
+    const userObj = user.toObject();
+    delete userObj.password;
+
+    return {
+      message: "Login successful",
+      token,
+      user: userObj
+    };
+
+  } catch (error) {
+    throw error;
+  }
 };
