@@ -1,224 +1,506 @@
 // src/modules/clients/pages/Clients.jsx
-import { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import {
-  Plus, Edit, Trash, Users, Home, DollarSign, FileText, Target,
-  BarChart3, Activity, LogOut, Menu, X
-} from "lucide-react";
+
+import { useEffect, useState, useCallback } from "react";
+import { Plus, Edit, Trash, Search } from "lucide-react";
+
 import API from "../../../utils/axios";
+import Navbar from "../../../components/layout/Navbar";
 import { useAuth } from "../../../context/AuthContext";
 
 export default function Clients() {
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: "", companyName: "", email: "", phone: "", address: "" });
-  const [editId, setEditId] = useState(null);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+const { user } = useAuth();
 
-  const menuItems = [
-    { title: "Dashboard", icon: <Home size={18} />, route: "/dashboard" },
-    { title: "Clients", icon: <Users size={18} />, route: "/clients" },
-    { title: "Invoices", icon: <FileText size={18} />, route: "/invoices" },
-    { title: "Revenues", icon: <DollarSign size={18} />, route: "/revenues" },
-    { title: "Targets", icon: <Target size={18} />, route: "/targets" },
-    { title: "Forecast", icon: <BarChart3 size={18} />, route: "/forecast" },
-    { title: "Health", icon: <Activity size={18} />, route: "/health" },
-  ];
+const [clients,setClients] = useState([]);
+const [loading,setLoading] = useState(true);
 
-  // ---------------- Fetch Clients ----------------
-  useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        const res = await API.get("/clients", { headers: { Authorization: `Bearer ${user?.token}` } });
-        setClients(Array.isArray(res.data.data?.data) ? res.data.data.data : []);
-      } catch (err) {
-        console.error(err);
-        if (err.response?.status === 401) { logout(); navigate("/login"); }
-      } finally { setLoading(false); }
-    };
-    fetchClients();
-  }, [user, logout, navigate]);
+const [search,setSearch] = useState("");
 
-  // ---------------- Form Handlers ----------------
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+const [form,setForm] = useState({
+name:"",
+companyName:"",
+email:"",
+phone:"",
+address:""
+});
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(""); setSuccess("");
+const [editId,setEditId] = useState(null);
+const [error,setError] = useState("");
+const [success,setSuccess] = useState("");
+const [showResults,setShowResults] = useState(false);
+const [filteredClients,setFilteredClients] = useState([]);
 
-    if (!form.name || !form.email) {
-      setError("Name and Email are required");
-      return;
-    }
 
-    try {
-      if (editId) {
-        // ---------------- Edit Client ----------------
-        const res = await API.put(`/clients/${editId}`, form, { headers: { Authorization: `Bearer ${user?.token}` } });
-        setClients(clients.map(c => c._id === editId ? res.data.data : c));
-        setSuccess("Client updated successfully!");
-        setEditId(null);
-      } else {
-        // ---------------- Add Client ----------------
-        const res = await API.post("/clients", form, { headers: { Authorization: `Bearer ${user?.token}` } });
-        setClients([res.data.data, ...clients]);
-        setSuccess("Client added successfully!");
-      }
-      setForm({ name: "", companyName: "", email: "", phone: "", address: "" });
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to save client");
-    }
-  };
+/* ================= FETCH CLIENTS ================= */
 
-  // ---------------- Edit Button ----------------
-  const handleEdit = (client) => {
-    setForm({
-      name: client.name || "",
-      companyName: client.companyName || "",
-      email: client.email || "",
-      phone: client.phone || "",
-      address: client.address || "",
-    });
-    setEditId(client._id);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+const fetchClients = useCallback(async()=>{
 
-  // ---------------- Delete Button ----------------
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this client?")) return;
-    try {
-      await API.delete(`/clients/${id}`, { headers: { Authorization: `Bearer ${user?.token}` } });
-      setClients(clients.filter(c => c._id !== id));
-      setSuccess("Client deleted successfully!");
-    } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.message || "Failed to delete client");
-    }
-  };
+try{
 
-  if (loading) return <div className="flex items-center justify-center h-screen"><p className="animate-pulse">Loading Clients...</p></div>;
+setLoading(true);
 
-  return (
-    <div className="flex min-h-screen bg-gray-100">
+const res = await API.get("/clients",{
+params:{search}
+});
 
-      {/* ---------------- Sidebar ---------------- */}
-      <aside className={`bg-white shadow-lg fixed h-full transition-all duration-300 z-20 ${sidebarOpen ? "w-64" : "w-16"}`}>
-        <div className="flex items-center justify-between p-4 border-b">
-          {sidebarOpen && <h2 className="text-lg font-bold text-indigo-600">ReadyTech CRM</h2>}
-          <button onClick={() => setSidebarOpen(!sidebarOpen)}><Menu size={20} /></button>
-        </div>
+const list =
+res?.data?.clients ||
+res?.data?.data?.clients ||
+res?.data?.data ||
+[];
 
-        <nav className="flex flex-col gap-2 px-2 mt-6">
-          {menuItems.map((item) => {
-            const active = location.pathname === item.route;
-            return (
-              <button
-                key={item.title}
-                onClick={() => navigate(item.route)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition
-                  ${active ? "bg-indigo-100 text-indigo-600 font-semibold" : "text-gray-600 hover:bg-gray-100"}
-                  ${!sidebarOpen ? "justify-center" : ""}`}
-              >
-                {item.icon}
-                {sidebarOpen && item.title}
-              </button>
-            );
-          })}
-        </nav>
+setClients(Array.isArray(list) ? list : []);
 
-        <div className="absolute bottom-0 w-full p-4 text-xs text-center text-gray-400">
-          {sidebarOpen && "Powered by ReadyTech Solutions"}
-        </div>
-      </aside>
+}catch(err){
 
-      {/* ---------------- Main Content ---------------- */}
-      <div className="flex flex-col flex-1" style={{ marginLeft: sidebarOpen ? "16rem" : "4rem" }}>
-        {/* Header */}
-        <header className="flex items-center justify-between px-6 py-4 bg-white shadow">
-          <h1 className="text-xl font-bold">{editId ? "Edit Client" : "Clients"}</h1>
-          <div className="flex items-center gap-4">
-            <span className="font-medium text-gray-700">Welcome, {user?.name}</span>
-            <button
-              onClick={() => { logout(); navigate("/login"); }}
-              className="flex items-center gap-2 px-3 py-2 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
-            >
-              <LogOut size={16} /> Logout
-            </button>
-          </div>
-        </header>
+console.error("CLIENT FETCH ERROR",err);
+setError("Failed to load clients");
 
-        {/* Page Content */}
-        <main className="p-6 space-y-6">
+}finally{
+setLoading(false);
+}
 
-          {/* Add/Edit Client Form */}
-          <section className="relative p-6 bg-white shadow rounded-2xl">
-            {editId && (
-              <button
-                onClick={() => { setEditId(null); setForm({ name: "", companyName: "", email: "", phone: "", address: "" }); }}
-                className="absolute p-2 bg-gray-200 rounded-full top-4 right-4 hover:bg-gray-300"
-              ><X size={16} /></button>
-            )}
+},[search]);
 
-            <h2 className="flex items-center gap-2 mb-4 text-xl font-bold"><Plus size={20} /> {editId ? "Edit Client" : "Add Client"}</h2>
-            {error && <p className="mb-3 text-red-600">{error}</p>}
-            {success && <p className="mb-3 text-green-600">{success}</p>}
 
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-5">
-              <input type="text" name="name" value={form.name} onChange={handleChange} placeholder="Client Name" className="p-3 border rounded-lg focus:ring-2 focus:ring-indigo-400"/>
-              <input type="text" name="companyName" value={form.companyName} onChange={handleChange} placeholder="Company Name" className="p-3 border rounded-lg focus:ring-2 focus:ring-indigo-400"/>
-              <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="Email" className="p-3 border rounded-lg focus:ring-2 focus:ring-indigo-400"/>
-              <input type="text" name="phone" value={form.phone} onChange={handleChange} placeholder="Phone" className="p-3 border rounded-lg focus:ring-2 focus:ring-indigo-400"/>
-              <input type="text" name="address" value={form.address} onChange={handleChange} placeholder="Address" className="p-3 border rounded-lg focus:ring-2 focus:ring-indigo-400"/>
-              <button type="submit" className="flex items-center justify-center col-span-1 gap-2 px-6 py-3 text-white transition bg-indigo-600 md:col-span-5 rounded-xl hover:bg-indigo-700">
-                <Plus size={16} /> {editId ? "Update Client" : "Add Client"}
-              </button>
-            </form>
-          </section>
+useEffect(()=>{
+fetchClients();
+},[fetchClients]);
 
-          {/* Clients Table */}
-          <section className="p-6 overflow-x-auto bg-white shadow rounded-2xl">
-            <h2 className="flex items-center gap-2 mb-4 text-xl font-bold"><Users size={20} /> Client List</h2>
-            <table className="w-full border-collapse table-auto">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="p-3 text-left text-gray-600">Name</th>
-                  <th className="p-3 text-left text-gray-600">Company</th>
-                  <th className="p-3 text-left text-gray-600">Email</th>
-                  <th className="p-3 text-left text-gray-600">Phone</th>
-                  <th className="p-3 text-left text-gray-600">Address</th>
-                  <th className="p-3 text-left text-gray-600">Status</th>
-                  <th className="p-3 text-left text-gray-600">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {clients.length === 0 ? (
-                  <tr><td colSpan={7} className="p-3 text-center text-gray-500">No clients found</td></tr>
-                ) : clients.map(c => (
-                  <tr key={c._id} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-medium">{c.name}</td>
-                    <td className="p-3">{c.companyName || "-"}</td>
-                    <td className="p-3">{c.email}</td>
-                    <td className="p-3">{c.phone || "-"}</td>
-                    <td className="p-3">{c.address || "-"}</td>
-                    <td className={`p-3 font-semibold ${c.status === "active" ? "text-green-600" : "text-red-600"}`}>{c.status}</td>
-                    <td className="flex gap-2 p-3">
-                      <button onClick={() => handleEdit(c)} className="p-2 text-blue-600 rounded-lg hover:bg-blue-100"><Edit size={16} /></button>
-                      <button onClick={() => handleDelete(c._id)} className="p-2 text-red-600 rounded-lg hover:bg-red-100"><Trash size={16} /></button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
 
-        </main>
-      </div>
-    </div>
-  );
+
+/* ================= FORM ================= */
+
+const handleChange = (e)=>{
+setForm({...form,[e.target.name]:e.target.value});
+};
+
+const resetForm = ()=>{
+setForm({
+name:"",
+companyName:"",
+email:"",
+phone:"",
+address:""
+});
+setEditId(null);
+};
+
+
+
+/* ================= CREATE / UPDATE ================= */
+
+const handleSubmit = async(e)=>{
+
+e.preventDefault();
+setError("");
+setSuccess("");
+
+if(!form.name || !form.email){
+setError("Name and Email required");
+return;
+}
+
+try{
+
+if(editId){
+
+const res = await API.put(`/clients/${editId}`,form);
+
+setClients(prev =>
+prev.map(c=>c._id===editId ? res.data.data : c)
+);
+
+setSuccess("Client updated");
+
+}else{
+
+const res = await API.post("/clients",form);
+
+setClients(prev=>[res.data.data,...prev]);
+
+setSuccess("Client created");
+
+}
+
+resetForm();
+
+}catch(err){
+
+setError(err?.response?.data?.message || "Save failed");
+
+}
+
+};
+
+
+
+/* ================= EDIT ================= */
+
+const handleEdit = (client)=>{
+
+setEditId(client._id);
+
+setForm({
+name:client.name || "",
+companyName:client.companyName || "",
+email:client.email || "",
+phone:client.phone || "",
+address:client.address || ""
+});
+
+window.scrollTo({top:0,behavior:"smooth"});
+
+};
+
+
+
+/* ================= DELETE ================= */
+
+const handleDelete = async(id)=>{
+
+if(!window.confirm("Delete this client?")) return;
+
+try{
+
+await API.delete(`/clients/${id}`);
+
+setClients(prev => prev.filter(c=>c._id !== id));
+
+setSuccess("Client deleted");
+
+}catch(err){
+
+setError("Delete failed");
+
+}
+
+};
+
+useEffect(()=>{
+
+if(!search){
+setFilteredClients([]);
+return;
+}
+
+const results = clients.filter(client =>
+client.name?.toLowerCase().includes(search.toLowerCase()) ||
+client.companyName?.toLowerCase().includes(search.toLowerCase())
+);
+
+setFilteredClients(results.slice(0,5));
+
+},[search,clients]);
+
+/* ================= LOADING ================= */
+
+if(loading){
+
+return(
+
+<div className="flex items-center justify-center min-h-screen text-gray-400 bg-gray-950">
+
+<div className="w-10 h-10 border-4 border-indigo-500 rounded-full border-t-transparent animate-spin"/>
+
+</div>
+
+)
+
+}
+
+
+
+/* ================= UI ================= */
+
+return(
+
+<div className="min-h-screen text-gray-200 bg-gray-950">
+
+<Navbar/>
+
+
+{/* BACKGROUND GLOW */}
+
+<div className="fixed inset-0 -z-10">
+
+<div className="absolute bg-indigo-500 rounded-full w-96 h-96 blur-3xl top-20 left-20 opacity-20"/>
+
+<div className="absolute bg-purple-500 rounded-full w-96 h-96 blur-3xl bottom-20 right-20 opacity-20"/>
+
+</div>
+
+
+
+<main className="w-full p-8 space-y-8">
+
+
+{/* PAGE HEADER */}
+
+<div>
+
+<h1 className="text-2xl font-bold">
+Clients Management
+</h1>
+
+<p className="mt-1 text-sm text-gray-400">
+Create and manage your business clients.
+</p>
+
+</div>
+
+
+
+{/* SEARCH */}
+
+{/* SMART SEARCH */}
+
+<div className="relative w-full max-w-md">
+
+<div className="flex items-center gap-2 px-3 py-2 border border-gray-800 shadow bg-gray-900/70 backdrop-blur rounded-xl">
+
+<Search size={16} className="text-gray-400"/>
+
+<input
+type="text"
+placeholder="Search clients..."
+value={search}
+onChange={(e)=>{
+setSearch(e.target.value);
+setShowResults(true);
+}}
+className="flex-1 text-sm text-gray-200 placeholder-gray-500 bg-transparent outline-none"
+/>
+
+{search && (
+
+<button
+onClick={()=>{
+setSearch("");
+setShowResults(false);
+}}
+className="px-2 text-xs text-gray-400 hover:text-white"
+>
+Clear
+</button>
+
+)}
+
+</div>
+
+
+{/* DROPDOWN RESULTS */}
+
+{showResults && filteredClients.length > 0 && (
+
+<div className="absolute left-0 right-0 z-40 mt-2 overflow-hidden bg-gray-900 border border-gray-800 shadow-xl rounded-xl">
+
+{filteredClients.map(client => (
+
+<button
+key={client._id}
+onClick={()=>{
+
+setSearch(client.name);
+setShowResults(false);
+
+document
+.getElementById(`client-${client._id}`)
+?.scrollIntoView({behavior:"smooth"});
+
+}}
+className="flex items-center justify-between w-full px-4 py-3 text-sm text-left transition hover:bg-gray-800"
+>
+
+<div>
+
+<p className="font-medium text-gray-200">
+{client.name}
+</p>
+
+<p className="text-xs text-gray-400">
+{client.companyName || "Individual"}
+</p>
+
+</div>
+
+<span className="text-xs text-indigo-400">
+View
+</span>
+
+</button>
+
+))}
+
+</div>
+
+)}
+
+</div>
+
+{/* FORM */}
+
+<div className="p-6 bg-gray-900 border border-gray-800 shadow-lg rounded-2xl">
+
+<h2 className="flex items-center gap-2 mb-4 font-semibold">
+
+<Plus size={18}/>
+{editId ? "Edit Client" : "Add Client"}
+
+</h2>
+
+{error && <p className="mb-2 text-red-400">{error}</p>}
+{success && <p className="mb-2 text-green-400">{success}</p>}
+
+<form
+onSubmit={handleSubmit}
+className="grid grid-cols-1 gap-4 md:grid-cols-5"
+>
+
+<input
+name="name"
+value={form.name}
+onChange={handleChange}
+placeholder="Name"
+className="p-3 text-sm bg-gray-800 border border-gray-700 rounded-lg"
+/>
+
+<input
+name="companyName"
+value={form.companyName}
+onChange={handleChange}
+placeholder="Company"
+className="p-3 text-sm bg-gray-800 border border-gray-700 rounded-lg"
+/>
+
+<input
+name="email"
+value={form.email}
+onChange={handleChange}
+placeholder="Email"
+className="p-3 text-sm bg-gray-800 border border-gray-700 rounded-lg"
+/>
+
+<input
+name="phone"
+value={form.phone}
+onChange={handleChange}
+placeholder="Phone"
+className="p-3 text-sm bg-gray-800 border border-gray-700 rounded-lg"
+/>
+
+<input
+name="address"
+value={form.address}
+onChange={handleChange}
+placeholder="Address"
+className="p-3 text-sm bg-gray-800 border border-gray-700 rounded-lg"
+/>
+
+<button
+className="py-3 text-white bg-indigo-600 rounded-lg md:col-span-5 hover:bg-indigo-500"
+>
+{editId ? "Update Client" : "Add Client"}
+</button>
+
+</form>
+
+</div>
+
+
+
+{/* CLIENT TABLE */}
+
+<div className="overflow-hidden bg-gray-900 border border-gray-800 shadow-lg rounded-2xl">
+
+<table className="w-full text-sm">
+
+<thead className="bg-gray-800">
+
+<tr>
+
+<th className="p-3 text-left">Name</th>
+<th className="p-3 text-left">Company</th>
+<th className="p-3 text-left">Email</th>
+<th className="p-3 text-left">Phone</th>
+<th className="p-3 text-left">Status</th>
+<th className="p-3 text-center">Actions</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+{clients.length === 0 && (
+
+<tr>
+
+<td colSpan="6" className="p-6 text-center text-gray-500">
+No clients found
+</td>
+
+</tr>
+
+)}
+
+{clients.map(c=>(
+
+<tr
+key={c._id}
+className="border-t border-gray-800 hover:bg-gray-800"
+>
+
+<td className="p-3 font-medium">{c.name}</td>
+
+<td className="p-3">{c.companyName || "-"}</td>
+
+<td className="p-3">{c.email}</td>
+
+<td className="p-3">{c.phone || "-"}</td>
+
+<td className={`p-3 font-semibold ${
+c.status === "active"
+? "text-green-400"
+: "text-red-400"
+}`}>
+
+{c.status || "active"}
+
+</td>
+
+<td className="flex justify-center gap-2 p-3">
+
+<button
+onClick={()=>handleEdit(c)}
+className="p-2 text-blue-400 rounded hover:bg-blue-500/20"
+>
+<Edit size={16}/>
+</button>
+
+<button
+onClick={()=>handleDelete(c._id)}
+className="p-2 text-red-400 rounded hover:bg-red-500/20"
+>
+<Trash size={16}/>
+</button>
+
+</td>
+
+</tr>
+
+))}
+
+</tbody>
+
+</table>
+
+</div>
+
+</main>
+
+</div>
+
+)
+
 }

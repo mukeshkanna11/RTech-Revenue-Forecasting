@@ -1,57 +1,55 @@
-const Client = require("./client.model");
+const repo = require("./client.repository");
 
-const createClient = async (payload) => {
-  return Client.create(payload);
+exports.createClient = async (data) => {
+  return repo.create(data);
 };
 
-const getClients = async ({ page = 1, limit = 10, search = "" }) => {
-  const query = {
-    isDeleted: false,
-    $or: [
-      { name: { $regex: search, $options: "i" } },
-      { companyName: { $regex: search, $options: "i" } }
-    ]
+exports.getClients = async (query) => {
+
+  const page = Number(query.page) || 1;
+  const limit = Number(query.limit) || 10;
+
+  const skip = (page - 1) * limit;
+
+  const filter = {
+    isDeleted: false
   };
 
-  const clients = await Client.find(query)
-    .skip((page - 1) * limit)
-    .limit(limit)
-    .sort({ createdAt: -1 });
+  if (query.status) filter.status = query.status;
 
-  const total = await Client.countDocuments(query);
+  if (query.search) {
+    filter.$or = [
+      { name: new RegExp(query.search, "i") },
+      { email: new RegExp(query.search, "i") },
+      { companyName: new RegExp(query.search, "i") }
+    ];
+  }
+
+  const options = {
+    skip,
+    limit,
+    sort: { createdAt: -1 }
+  };
+
+  const clients = await repo.findAll(filter, options);
+  const total = await repo.count(filter);
 
   return {
-    data: clients,
+    clients,
     total,
     page,
     pages: Math.ceil(total / limit)
   };
 };
 
-const getClientById = async (id) => {
-  return Client.findOne({ _id: id, isDeleted: false });
+exports.getClientById = async (id) => {
+  return repo.findById(id);
 };
 
-const updateClient = async (id, payload) => {
-  return Client.findOneAndUpdate(
-    { _id: id, isDeleted: false },
-    payload,
-    { new: true }
-  );
+exports.updateClient = async (id, data) => {
+  return repo.update(id, data);
 };
 
-const deleteClient = async (id) => {
-  return Client.findByIdAndUpdate(
-    id,
-    { isDeleted: true },
-    { new: true }
-  );
-};
-
-module.exports = {
-  createClient,
-  getClients,
-  getClientById,
-  updateClient,
-  deleteClient
+exports.deleteClient = async (id) => {
+  return repo.softDelete(id);
 };

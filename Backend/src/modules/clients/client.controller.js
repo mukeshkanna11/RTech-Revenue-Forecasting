@@ -1,65 +1,79 @@
-const clientService = require("./client.service");
+const service = require("./client.service");
 
-const createClient = async (req, res) => {
-  const client = await clientService.createClient(req.body);
+exports.createClient = async (req, res, next) => {
+  try {
 
-  res.status(201).json({
-    success: true,
-    message: "Client created successfully",
-    data: client
-  });
+    const client = await service.createClient(req.body);
+
+    res.status(201).json({
+      success: true,
+      data: client
+    });
+
+  } catch (err) {
+    next(err);
+  }
 };
 
-const getClients = async (req, res) => {
-  const { page, limit, search } = req.query;
+exports.getClients = async (req, res, next) => {
+  try {
 
-  const clients = await clientService.getClients({
-    page,
-    limit,
-    search
-  });
+    const result = await service.getClients(req.query);
 
-  res.json({
-    success: true,
-    data: clients
-  });
+    res.json({
+      success: true,
+      ...result
+    });
+
+  } catch (err) {
+    next(err);
+  }
 };
 
-const getClientById = async (req, res) => {
-  const client = await clientService.getClientById(req.params.id);
+exports.getClient = async (req, res, next) => {
+  try {
 
-  res.json({
-    success: true,
-    data: client
-  });
+    const client = await service.getClientById(req.params.id);
+
+    res.json({
+      success: true,
+      data: client
+    });
+
+  } catch (err) {
+    next(err);
+  }
 };
 
-const updateClient = async (req, res) => {
-  const client = await clientService.updateClient(
-    req.params.id,
-    req.body
-  );
+exports.updateClient = async (req, res, next) => {
+  try {
 
-  res.json({
-    success: true,
-    message: "Client updated successfully",
-    data: client
-  });
+    const client = await service.updateClient(
+      req.params.id,
+      req.body
+    );
+
+    res.json({
+      success: true,
+      data: client
+    });
+
+  } catch (err) {
+    next(err);
+  }
 };
 
-const deleteClient = async (req, res) => {
-  await clientService.deleteClient(req.params.id);
+exports.deleteClient = async (req, res, next) => {
+  try {
 
-  res.json({
-    success: true,
-    message: "Client deleted successfully"
-  });
-};
+    await service.deleteClient(req.params.id);
 
-module.exports = {
-  createClient,
-  getClients,
-  getClientById,
-  updateClient,
-  deleteClient
+    res.json({
+      success: true,
+      message: "Client deleted"
+    });
+
+  } catch (err) {
+    next(err);
+  }
 };
