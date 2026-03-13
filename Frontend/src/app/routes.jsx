@@ -139,6 +139,7 @@ export default function AppRoutes() {
             </ProtectedRoute>
           }
         />
+        <Route path="/invoices/:id" element={<InvoicePage />} />
         <Route
           path="/invoices/:id/pdf"
           element={
