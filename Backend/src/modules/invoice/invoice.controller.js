@@ -1,19 +1,58 @@
 const invoiceService = require("./invoice.service");
-const ApiError = require("../../utils/ApiError");
 const catchAsync = require("../../utils/catchAsync");
+const ApiError = require("../../utils/ApiError");
+const Invoice = require("./invoice.model");
 
-/**
- * =====================================
- * CREATE INVOICE
- * POST /api/v1/invoices
- * =====================================
- */
+/* ================= CREATE INVOICE ================= */
+
 const createInvoice = catchAsync(async (req, res) => {
 
+  const body = req.body;
+
+  /* ===== VALIDATIONS ===== */
+
+  if (!body.client) {
+    throw new ApiError(400, "Client is required");
+  }
+
+  if (!body.items || body.items.length === 0) {
+    throw new ApiError(400, "Invoice must contain at least one item");
+  }
+
+  /* ===== SANITIZE PAYMENT METHOD ===== */
+
+  if (body.paymentMethod) {
+    body.paymentMethod = body.paymentMethod.toLowerCase();
+  }
+
+  /* ===== GENERATE INVOICE NUMBER ===== */
+
+  const lastInvoice = await Invoice
+    .findOne()
+    .sort({ createdAt: -1 })
+    .select("invoiceNumber");
+
+  let invoiceNumber = "INV-0001";
+
+  if (lastInvoice) {
+
+    const lastNumber = parseInt(
+      lastInvoice.invoiceNumber.split("-")[1]
+    );
+
+    invoiceNumber = `INV-${String(lastNumber + 1).padStart(4, "0")}`;
+
+  }
+
+  /* ===== BUILD PAYLOAD ===== */
+
   const payload = {
-    ...req.body,
-    createdBy: req.user?.id || null
+    ...body,
+    invoiceNumber,
+    createdBy: req.user?.id
   };
+
+  /* ===== CREATE ===== */
 
   const invoice = await invoiceService.createInvoice(payload);
 
@@ -26,42 +65,27 @@ const createInvoice = catchAsync(async (req, res) => {
 });
 
 
-/**
- * =====================================
- * GET ALL INVOICES
- * GET /api/v1/invoices
- * =====================================
- */
+/* ================= GET ALL ================= */
+
 const getInvoices = catchAsync(async (req, res) => {
 
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
-
-  const search = req.query.search || "";
-  const status = req.query.status;
-
-  const invoices = await invoiceService.getInvoices({
-    page,
-    limit,
-    search,
-    status
+  const result = await invoiceService.getInvoices({
+    page: req.query.page,
+    limit: req.query.limit,
+    search: req.query.search,
+    status: req.query.status
   });
 
-  res.status(200).json({
+  res.json({
     success: true,
-    message: "Invoices fetched successfully",
-    ...invoices
+    ...result
   });
 
 });
 
 
-/**
- * =====================================
- * GET INVOICE BY ID
- * GET /api/v1/invoices/:id
- * =====================================
- */
+/* ================= GET SINGLE ================= */
+
 const getInvoiceById = catchAsync(async (req, res) => {
 
   const invoice = await invoiceService.getInvoiceById(req.params.id);
@@ -70,7 +94,7 @@ const getInvoiceById = catchAsync(async (req, res) => {
     throw new ApiError(404, "Invoice not found");
   }
 
-  res.status(200).json({
+  res.json({
     success: true,
     data: invoice
   });
@@ -78,24 +102,26 @@ const getInvoiceById = catchAsync(async (req, res) => {
 });
 
 
-/**
- * =====================================
- * UPDATE INVOICE
- * PATCH /api/v1/invoices/:id
- * =====================================
- */
+/* ================= UPDATE ================= */
+
 const updateInvoice = catchAsync(async (req, res) => {
+
+  const body = req.body;
+
+  if (body.paymentMethod) {
+    body.paymentMethod = body.paymentMethod.toLowerCase();
+  }
 
   const invoice = await invoiceService.updateInvoice(
     req.params.id,
-    req.body
+    body
   );
 
   if (!invoice) {
-    throw new ApiError(404, "Invoice not found or already deleted");
+    throw new ApiError(404, "Invoice not found");
   }
 
-  res.status(200).json({
+  res.json({
     success: true,
     message: "Invoice updated successfully",
     data: invoice
@@ -104,49 +130,37 @@ const updateInvoice = catchAsync(async (req, res) => {
 });
 
 
-/**
- * =====================================
- * UPDATE INVOICE STATUS
- * PATCH /api/v1/invoices/:id/status
- * =====================================
- */
+/* ================= UPDATE STATUS ================= */
+
 const updateInvoiceStatus = catchAsync(async (req, res) => {
 
   const { status } = req.body;
+
+  if (!status) {
+    throw new ApiError(400, "Status is required");
+  }
 
   const invoice = await invoiceService.updateInvoiceStatus(
     req.params.id,
     status
   );
 
-  if (!invoice) {
-    throw new ApiError(404, "Invoice not found");
-  }
-
-  res.status(200).json({
+  res.json({
     success: true,
-    message: "Invoice status updated successfully",
+    message: "Status updated",
     data: invoice
   });
 
 });
 
 
-/**
- * =====================================
- * DELETE INVOICE (SOFT DELETE)
- * DELETE /api/v1/invoices/:id
- * =====================================
- */
+/* ================= DELETE ================= */
+
 const deleteInvoice = catchAsync(async (req, res) => {
 
-  const invoice = await invoiceService.deleteInvoice(req.params.id);
+  await invoiceService.deleteInvoice(req.params.id);
 
-  if (!invoice) {
-    throw new ApiError(404, "Invoice not found");
-  }
-
-  res.status(200).json({
+  res.json({
     success: true,
     message: "Invoice deleted successfully"
   });
@@ -154,24 +168,62 @@ const deleteInvoice = catchAsync(async (req, res) => {
 });
 
 
-/**
- * =====================================
- * DOWNLOAD INVOICE PDF
- * GET /api/v1/invoices/:id/pdf
- * =====================================
- */
+/* ================= DOWNLOAD PDF ================= */
+
 const downloadInvoicePDF = catchAsync(async (req, res) => {
 
-  const invoice = await invoiceService.getInvoiceById(req.params.id);
+  const { invoice, pdf } =
+    await invoiceService.downloadInvoicePDF(req.params.id);
 
-  if (!invoice) {
-    throw new ApiError(404, "Invoice not found");
-  }
+  res.setHeader("Content-Type", "application/pdf");
 
-  res.status(200).json({
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename=${invoice.invoiceNumber}.pdf`
+  );
+
+  res.send(pdf);
+
+});
+
+
+/* ================= EMAIL INVOICE ================= */
+
+const emailInvoice = catchAsync(async (req, res) => {
+
+  await invoiceService.emailInvoice(req.params.id);
+
+  res.json({
     success: true,
-    message: "PDF generation route working",
-    data: invoice
+    message: "Invoice email sent successfully"
+  });
+
+});
+
+
+/* ================= STATS ================= */
+
+const getInvoiceStats = catchAsync(async (req, res) => {
+
+  const stats = await invoiceService.getInvoiceStats();
+
+  res.json({
+    success: true,
+    data: stats
+  });
+
+});
+
+
+/* ================= REVENUE ANALYTICS ================= */
+
+const getRevenueAnalytics = catchAsync(async (req, res) => {
+
+  const data = await invoiceService.getRevenueAnalytics();
+
+  res.json({
+    success: true,
+    data
   });
 
 });
@@ -184,5 +236,8 @@ module.exports = {
   updateInvoice,
   updateInvoiceStatus,
   deleteInvoice,
-  downloadInvoicePDF
+  downloadInvoicePDF,
+  emailInvoice,
+  getInvoiceStats,
+  getRevenueAnalytics
 };

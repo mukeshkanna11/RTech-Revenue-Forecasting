@@ -1,3 +1,4 @@
+// src/routes/AppRoutes.jsx
 import { Routes, Route, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 import ProtectedRoute from "../components/layout/ProtectedRoute";
@@ -5,7 +6,6 @@ import ProtectedRoute from "../components/layout/ProtectedRoute";
 /* ================================
    Lazy Loaded Pages
 ================================ */
-
 const Login = lazy(() => import("../modules/auth/pages/Login"));
 const Register = lazy(() => import("../modules/auth/pages/Register"));
 
@@ -29,8 +29,18 @@ const Clients = lazy(() =>
   import("../modules/clients/pages/Clients")
 );
 
-const Invoices = lazy(() =>
+/* ==================== Invoices ==================== */
+const InvoicePage = lazy(() =>
   import("../modules/invoices/pages/InvoicePage")
+);
+const CreateInvoice = lazy(() =>
+  import("../modules/invoices/pages/CreateInvoice")
+);
+const InvoiceDetails = lazy(() =>
+  import("../modules/invoices/pages/InvoiceDetails")
+);
+const InvoicePDF = lazy(() =>
+  import("../modules/invoices/pages/InvoicePDF")
 );
 
 const Health = lazy(() =>
@@ -40,7 +50,6 @@ const Health = lazy(() =>
 /* ================================
    Loader
 ================================ */
-
 const Loader = () => (
   <div className="flex items-center justify-center h-screen text-lg">
     Loading...
@@ -60,7 +69,6 @@ export default function AppRoutes() {
         <Route path="/register" element={<Register />} />
 
         {/* PROTECTED ROUTES */}
-
         <Route
           path="/dashboard"
           element={
@@ -106,15 +114,41 @@ export default function AppRoutes() {
           }
         />
 
+        {/* ==================== INVOICES ==================== */}
         <Route
           path="/invoices"
           element={
             <ProtectedRoute>
-              <Invoices />
+              <InvoicePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/invoices/create"
+          element={
+            <ProtectedRoute>
+              <CreateInvoice />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/invoices/:id"
+          element={
+            <ProtectedRoute>
+              <InvoiceDetails />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/invoices/:id/pdf"
+          element={
+            <ProtectedRoute>
+              <InvoicePDF />
             </ProtectedRoute>
           }
         />
 
+        {/* Health */}
         <Route
           path="/health"
           element={
@@ -133,7 +167,6 @@ export default function AppRoutes() {
             </div>
           }
         />
-
       </Routes>
     </Suspense>
   );
