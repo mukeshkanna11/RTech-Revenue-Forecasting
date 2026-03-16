@@ -1,48 +1,40 @@
 const asyncHandler = require("../../utils/asyncHandler");
 const targetService = require("./target.service");
-const ApiError = require("../../utils/ApiError");
 
 /**
- * Create Target
+ * CREATE TARGET
  */
 const createTarget = asyncHandler(async (req, res) => {
+
   const target = await targetService.createTarget(req.body);
 
   res.status(201).json({
     success: true,
+    message: "Target created successfully",
     data: target
   });
 });
 
 /**
- * Get All Targets (Pagination)
+ * GET ALL TARGETS
  */
 const getAllTargets = asyncHandler(async (req, res) => {
 
-  const { page = 1, limit = 10 } = req.query;
-
-  const targets = await targetService.getAllTargets({
-    page: Number(page),
-    limit: Number(limit)
-  });
+  const result = await targetService.getAllTargets(req.query);
 
   res.status(200).json({
     success: true,
-    data: targets
+    ...result
   });
 });
 
 /**
- * Get Target By ID
+ * GET TARGET BY ID
  */
 const getTargetById = asyncHandler(async (req, res) => {
 
   const target = await targetService.getTargetById(req.params.id);
 
-  if (!target) {
-    throw new ApiError(404, "Target not found");
-  }
-
   res.status(200).json({
     success: true,
     data: target
@@ -50,7 +42,7 @@ const getTargetById = asyncHandler(async (req, res) => {
 });
 
 /**
- * Update Target
+ * UPDATE TARGET
  */
 const updateTarget = asyncHandler(async (req, res) => {
 
@@ -59,30 +51,49 @@ const updateTarget = asyncHandler(async (req, res) => {
     req.body
   );
 
-  if (!updated) {
-    throw new ApiError(404, "Target not found");
-  }
-
   res.status(200).json({
     success: true,
+    message: "Target updated successfully",
     data: updated
   });
 });
 
 /**
- * Delete Target
+ * DELETE TARGET
  */
 const deleteTarget = asyncHandler(async (req, res) => {
 
-  const deleted = await targetService.deleteTarget(req.params.id);
-
-  if (!deleted) {
-    throw new ApiError(404, "Target not found");
-  }
+  await targetService.deleteTarget(req.params.id);
 
   res.status(200).json({
     success: true,
     message: "Target deleted successfully"
+  });
+});
+
+/**
+ * TARGET VS REVENUE REPORT
+ */
+const targetVsRevenue = asyncHandler(async (req, res) => {
+
+  const report = await targetService.getTargetVsRevenue();
+
+  res.status(200).json({
+    success: true,
+    data: report
+  });
+});
+
+/**
+ * DEPARTMENT TARGET ANALYTICS
+ */
+const departmentTargets = asyncHandler(async (req, res) => {
+
+  const analytics = await targetService.getDepartmentTargets();
+
+  res.status(200).json({
+    success: true,
+    data: analytics
   });
 });
 
@@ -91,5 +102,7 @@ module.exports = {
   getAllTargets,
   getTargetById,
   updateTarget,
-  deleteTarget
+  deleteTarget,
+  targetVsRevenue,
+  departmentTargets
 };

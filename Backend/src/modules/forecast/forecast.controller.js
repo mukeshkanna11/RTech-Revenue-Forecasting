@@ -1,86 +1,36 @@
-const {
-  forecastRevenue,
-  forecastByDepartment
-} = require("./forecast.service");
+// ==========================
+// forecast.controller.js
+// ==========================
+const { forecastRevenue, forecastByDepartment } = require("./forecast.service");
 
 /**
- * ================================
- * FORECAST REVENUE
- * ================================
+ * GET /api/forecast?months=6
  */
-
 const getForecast = async (req, res, next) => {
-
   try {
+    const months = Number(req.query.months) || 6;
+    const data = await forecastRevenue(months);
 
-    const months =
-      Number(req.query.months) || 6;
-
-    const forecast =
-      await forecastRevenue(months);
-
-    res.status(200).json({
-
-      success: true,
-
-      data: forecast
-
-    });
-
+    res.status(200).json({ success: true, data, meta: { months } });
   } catch (error) {
-
     next(error);
-
   }
-
 };
-
 
 /**
- * ================================
- * DEPARTMENT FORECAST
- * ================================
+ * GET /api/forecast/department/:department?months=6
  */
-
-const getDepartmentForecast =
-async (req, res, next) => {
-
+const getDepartmentForecast = async (req, res, next) => {
   try {
-
     const { department } = req.params;
+    const months = Number(req.query.months) || 6;
 
-    const months =
-      Number(req.query.months) || 6;
+    const forecast = await forecastByDepartment(department, months);
 
-    const forecast =
-      await forecastByDepartment(
-        department,
-        months
-      );
-
-    res.status(200).json({
-
-      success: true,
-
-      department,
-
-      forecast
-
-    });
-
+    res.status(200).json({ success: true, department, forecast, meta: { months } });
   } catch (error) {
-
     next(error);
-
   }
-
 };
 
-
-module.exports = {
-
-  getForecast,
-
-  getDepartmentForecast
-
-};
+module.exports = { getForecast, getDepartmentForecast };

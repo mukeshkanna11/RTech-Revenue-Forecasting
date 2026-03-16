@@ -1,213 +1,88 @@
+// src/modules/dashboard/dashboard.service.js
+
 const Revenue = require("../revenue/revenue.model");
-const Target = require("../target/target.model");
+const Client = require("../clients/client.model");
+const Invoice = require("../invoice/invoice.model");
 
-const getDashboardSummary = async () => {
+/**
+ * Fetch dashboard summary
+ */
+async function getDashboardSummary() {
   try {
-
-    /* ================================
-       TOTAL REVENUE
-    ================================= */
-
-    const revenueResult = await Revenue.aggregate([
-      { $match: { isDeleted: false } },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: { $sum: "$amount" }
-        }
-      }
+    // Total Revenue
+    const totalRevenueAgg = await Revenue.aggregate([
+      { $group: { _id: null, total: { $sum: "$amount" } } },
     ]);
+    const totalRevenue = totalRevenueAgg[0]?.total || 0;
 
-    const totalRevenue = revenueResult[0]?.totalRevenue || 0;
+    // Monthly Revenue for chart (last 6 months)
+    const now = new Date();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(now.getMonth() - 5);
 
-
-    /* ================================
-       TOTAL TARGET
-    ================================= */
-
-    const targetResult = await Target.aggregate([
-      { $match: { isDeleted: false } },
+    const monthlyRevenueAgg = await Revenue.aggregate([
       {
-        $group: {
-          _id: null,
-          totalTarget: { $sum: "$targetAmount" }
-        }
-      }
-    ]);
-
-    const totalTarget = targetResult[0]?.totalTarget || 0;
-
-
-    /* ================================
-       ACHIEVEMENT PERCENT
-    ================================= */
-
-    const achievementPercent =
-      totalTarget > 0
-        ? ((totalRevenue / totalTarget) * 100)
-        : 0;
-
-
-    /* ================================
-       MONTHLY REVENUE TREND
-    ================================= */
-
-    const monthlyRevenue = await Revenue.aggregate([
-      { $match: { isDeleted: false } },
-
+        $match: { createdAt: { $gte: sixMonthsAgo } },
+      },
       {
         $group: {
           _id: {
-            year: "$year",
-            month: "$month"
+            month: { $month: "$createdAt" },
+            year: { $year: "$createdAt" },
           },
-          revenue: { $sum: "$amount" }
-        }
+          revenue: { $sum: "$amount" },
+        },
       },
-
-      {
-        $sort: {
-          "_id.year": 1,
-          "_id.month": 1
-        }
-      }
+      { $sort: { "_id.year": 1, "_id.month": 1 } },
     ]);
 
+    // Active clients count
+    const activeClients = await Client.countDocuments({ isActive: true });
 
-    /* ================================
-       MONTHLY GROWTH
-    ================================= */
+    // Total invoices
+    const invoicesCount = await Invoice.countDocuments();
 
-    let monthlyGrowth = 0;
-
-    if (monthlyRevenue.length >= 2) {
-
-      const current =
-        monthlyRevenue[monthlyRevenue.length - 1].revenue;
-
-      const previous =
-        monthlyRevenue[monthlyRevenue.length - 2].revenue;
-
-      monthlyGrowth =
-        previous > 0
-          ? ((current - previous) / previous) * 100
-          : 0;
-    }
-
-
-    /* ================================
-       DEPARTMENT REVENUE
-    ================================= */
-
-    const departmentStats = await Revenue.aggregate([
-      { $match: { isDeleted: false } },
-
+    // Top clients by revenue
+    const topClientsAgg = await Revenue.aggregate([
       {
         $group: {
-          _id: "$department",
-          revenue: { $sum: "$amount" }
-        }
+          _id: "$client",
+          revenue: { $sum: "$amount" },
+        },
       },
-
-      {
-        $project: {
-          department: "$_id",
-          revenue: 1,
-          _id: 0
-        }
-      },
-
-      {
-        $sort: { revenue: -1 }
-      }
-    ]);
-
-
-    /* ================================
-       REVENUE VS TARGET
-    ================================= */
-
-    const revenueVsTarget = await Revenue.aggregate([
-      { $match: { isDeleted: false } },
-
+      { $sort: { revenue: -1 } },
+      { $limit: 5 },
       {
         $lookup: {
-          from: "targets",
-          let: {
-            month: "$month",
-            year: "$year",
-            department: "$department"
-          },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $eq: ["$month", "$$month"] },
-                    { $eq: ["$year", "$$year"] },
-                    { $eq: ["$department", "$$department"] },
-                    { $eq: ["$isDeleted", false] }
-                  ]
-                }
-              }
-            }
-          ],
-          as: "target"
-        }
+          from: "clients",
+          localField: "_id",
+          foreignField: "_id",
+          as: "clientInfo",
+        },
       },
-
-      {
-        $unwind: {
-          path: "$target",
-          preserveNullAndEmptyArrays: true
-        }
-      },
-
+      { $unwind: "$clientInfo" },
       {
         $project: {
-          month: 1,
-          year: 1,
-          department: 1,
-          revenue: "$amount",
-          target: "$target.targetAmount"
-        }
-      }
+          _id: 0,
+          name: "$clientInfo.name",
+          revenue: 1,
+          img: "$clientInfo.avatar", // optional: client image
+        },
+      },
     ]);
 
-
-    /* ================================
-       FINAL RESPONSE
-    ================================= */
-
     return {
-
       totalRevenue,
-
-      totalTarget,
-
-      achievementPercent:
-        Number(achievementPercent.toFixed(2)),
-
-      monthlyGrowth:
-        Number(monthlyGrowth.toFixed(2)),
-
-      monthlyRevenue,
-
-      departmentStats,
-
-      revenueVsTarget
-
+      monthlyRevenue: monthlyRevenueAgg,
+      activeClients,
+      invoices: invoicesCount,
+      topClients: topClientsAgg,
+      monthlyGrowth: 0, // optional, calculate from last month
     };
-
   } catch (error) {
-
-    throw new Error(
-      "Dashboard summary failed: " + error.message
-    );
-
+    console.error("[DashboardService] getDashboardSummary:", error);
+    throw new Error("Failed to fetch dashboard summary");
   }
-};
+}
 
-module.exports = {
-  getDashboardSummary
-};
+module.exports = { getDashboardSummary };

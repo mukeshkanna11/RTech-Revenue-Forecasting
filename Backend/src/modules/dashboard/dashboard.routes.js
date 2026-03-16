@@ -1,9 +1,10 @@
+// src/modules/dashboard/dashboard.routes.js
+
 const express = require("express");
-const { getSummary } = require("./dashboard.controller");
-const { protect } = require("../../middlewares/auth.middleware");
-
 const router = express.Router();
+const dashboardController = require("./dashboard.controller");
 
-router.get("/summary", protect, getSummary);
+// GET /api/v1/dashboard/summary
+router.get("/summary", dashboardController.getSummary);
 
 module.exports = router;

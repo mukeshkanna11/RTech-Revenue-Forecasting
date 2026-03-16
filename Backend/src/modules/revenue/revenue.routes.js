@@ -1,4 +1,5 @@
 const express = require("express");
+
 const {
   createRevenue,
   getAllRevenues,
@@ -6,7 +7,9 @@ const {
   updateRevenue,
   deleteRevenue,
   getForecast,
-  compareTarget
+  compareTarget,
+  getRevenueTrend,
+  getDepartmentRevenue
 } = require("./revenue.controller");
 
 const { protect } = require("../../middlewares/auth.middleware");
@@ -15,23 +18,52 @@ const { authorize } = require("../../middlewares/role.middleware");
 const router = express.Router();
 
 /**
- * Admin Only - Create Revenue
+ * =====================================
+ * PUBLIC AUTHENTICATED ROUTES
+ * =====================================
  */
-router.post("/", protect, authorize("admin"), createRevenue);
+
+router.use(protect);
 
 /**
- * All Authenticated Users - View Revenues
+ * Revenue Listing
  */
-router.get("/", protect, getAllRevenues);
+router.get("/", getAllRevenues);
 
-router.get("/forecast", protect, getForecast);
+router.get("/trend", getRevenueTrend);
 
-router.get("/compare", protect, compareTarget);
+router.get("/department", getDepartmentRevenue);
 
-router.get("/:id", protect, getRevenueById);
+router.get("/forecast", getForecast);
 
-router.put("/:id", protect, authorize("admin"), updateRevenue);
+router.get("/compare", compareTarget);
 
-router.delete("/:id", protect, authorize("admin"), deleteRevenue);
+router.get("/:id", getRevenueById);
+
+
+/**
+ * =====================================
+ * ADMIN ONLY ROUTES
+ * =====================================
+ */
+
+router.post(
+  "/",
+  authorize("admin"),
+  createRevenue
+);
+
+router.put(
+  "/:id",
+  authorize("admin"),
+  updateRevenue
+);
+
+router.delete(
+  "/:id",
+  authorize("admin"),
+  deleteRevenue
+);
+
 
 module.exports = router;

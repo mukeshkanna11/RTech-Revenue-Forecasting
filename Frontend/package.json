@@ -14,7 +14,7 @@
     "axios": "^1.13.6",
     "buffer": "^6.0.3",
     "file-saver": "^2.0.5",
-    "framer-motion": "^12.35.2",
+    "framer-motion": "^12.36.0",
     "jspdf": "^4.2.0",
     "lucide-react": "^0.576.0",
     "react": "^19.2.0",

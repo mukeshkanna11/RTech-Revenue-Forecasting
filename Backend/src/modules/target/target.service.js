@@ -1,57 +1,88 @@
+const mongoose = require("mongoose");
 const Target = require("./target.model");
 const Revenue = require("../revenue/revenue.model");
 const ApiError = require("../../utils/ApiError");
 
 /**
- * ================================
- * CREATE TARGET
- * ================================
+ * =====================================
+ * BUILD FILTER
+ * =====================================
  */
-const createTarget = async (payload) => {
+const buildFilter = (query = {}) => {
+  const filter = { isDeleted: false };
 
-  const existing = await Target.findOne({
-    month: payload.month,
-    year: payload.year,
-    department: payload.department,
-    isDeleted: false
-  });
+  if (query.year) filter.year = Number(query.year);
+  if (query.month) filter.month = Number(query.month);
+  if (query.department) filter.department = query.department;
 
-  if (existing) {
-    throw new ApiError(
-      400,
-      "Target already exists for this month, year, and department"
-    );
-  }
-
-  return await Target.create(payload);
+  return filter;
 };
 
+/**
+ * =====================================
+ * CREATE TARGET
+ * =====================================
+ */
+const createTarget = async (payload) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const exists = await Target.findOne({
+      month: payload.month,
+      year: payload.year,
+      department: payload.department,
+      isDeleted: false
+    }).session(session);
+
+    if (exists) {
+      throw new ApiError(
+        409,
+        "Target already exists for this month, year and department"
+      );
+    }
+
+    const target = await Target.create([payload], { session });
+
+    await session.commitTransaction();
+
+    return target[0];
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+};
 
 /**
- * ================================
- * GET ALL TARGETS (Pagination + Filters)
- * ================================
+ * =====================================
+ * GET TARGETS WITH PAGINATION
+ * =====================================
  */
 const getAllTargets = async (query) => {
 
-  const page = Number(query.page) || 1;
-  const limit = Number(query.limit) || 10;
+  const page = Math.max(Number(query.page) || 1, 1);
+  const limit = Math.min(Number(query.limit) || 10, 100);
 
-  const filter = { isDeleted: false };
+  const filter = buildFilter(query);
 
-  if (query.year) filter.year = query.year;
-  if (query.department) filter.department = query.department;
+  const [targets, total] = await Promise.all([
 
-  const targets = await Target.find(filter)
-    .sort({ year: -1, month: -1 })
-    .skip((page - 1) * limit)
-    .limit(limit);
+    Target.find(filter)
+      .sort({ year: -1, month: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
 
-  const total = await Target.countDocuments(filter);
+    Target.countDocuments(filter)
+
+  ]);
 
   return {
     data: targets,
-    pagination: {
+    meta: {
       page,
       limit,
       total,
@@ -60,18 +91,21 @@ const getAllTargets = async (query) => {
   };
 };
 
-
 /**
- * ================================
+ * =====================================
  * GET TARGET BY ID
- * ================================
+ * =====================================
  */
 const getTargetById = async (id) => {
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ApiError(400, "Invalid target id");
+  }
 
   const target = await Target.findOne({
     _id: id,
     isDeleted: false
-  });
+  }).lean();
 
   if (!target) {
     throw new ApiError(404, "Target not found");
@@ -80,57 +114,65 @@ const getTargetById = async (id) => {
   return target;
 };
 
-
 /**
- * ================================
+ * =====================================
  * UPDATE TARGET
- * ================================
+ * =====================================
  */
 const updateTarget = async (id, payload) => {
 
-  const target = await Target.findOneAndUpdate(
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ApiError(400, "Invalid target id");
+  }
+
+  const updated = await Target.findOneAndUpdate(
     { _id: id, isDeleted: false },
     payload,
-    { new: true }
-  );
+    {
+      new: true,
+      runValidators: true
+    }
+  ).lean();
 
-  if (!target) {
+  if (!updated) {
     throw new ApiError(404, "Target not found");
   }
 
-  return target;
+  return updated;
 };
 
-
 /**
- * ================================
+ * =====================================
  * SOFT DELETE TARGET
- * ================================
+ * =====================================
  */
 const deleteTarget = async (id) => {
 
-  const target = await Target.findOneAndUpdate(
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ApiError(400, "Invalid target id");
+  }
+
+  const deleted = await Target.findOneAndUpdate(
     { _id: id, isDeleted: false },
     { isDeleted: true },
     { new: true }
-  );
+  ).lean();
 
-  if (!target) {
+  if (!deleted) {
     throw new ApiError(404, "Target not found");
   }
 
-  return target;
+  return deleted;
 };
 
-
 /**
- * ================================
+ * =====================================
  * TARGET VS REVENUE REPORT
- * ================================
+ * =====================================
  */
 const getTargetVsRevenue = async () => {
 
-  const report = await Target.aggregate([
+  return Target.aggregate([
 
     { $match: { isDeleted: false } },
 
@@ -154,6 +196,12 @@ const getTargetVsRevenue = async () => {
                 ]
               }
             }
+          },
+          {
+            $group: {
+              _id: null,
+              revenue: { $sum: "$amount" }
+            }
           }
         ],
         as: "revenue"
@@ -161,43 +209,57 @@ const getTargetVsRevenue = async () => {
     },
 
     {
-      $unwind: {
-        path: "$revenue",
-        preserveNullAndEmptyArrays: true
+      $addFields: {
+        revenue: {
+          $ifNull: [{ $arrayElemAt: ["$revenue.revenue", 0] }, 0]
+        }
+      }
+    },
+
+    {
+      $addFields: {
+        performance: {
+          $multiply: [
+            { $divide: ["$revenue", "$targetAmount"] },
+            100
+          ]
+        }
       }
     },
 
     {
       $project: {
+        _id: 0,
         month: 1,
         year: 1,
         department: 1,
         target: "$targetAmount",
-        revenue: "$revenue.amount"
+        revenue: 1,
+        performance: { $round: ["$performance", 2] }
       }
-    }
+    },
+
+    { $sort: { year: -1, month: -1 } }
 
   ]);
-
-  return report;
 };
 
-
 /**
- * ================================
- * DEPARTMENT TARGET ANALYTICS
- * ================================
+ * =====================================
+ * DEPARTMENT ANALYTICS
+ * =====================================
  */
 const getDepartmentTargets = async () => {
 
-  return await Target.aggregate([
+  return Target.aggregate([
 
     { $match: { isDeleted: false } },
 
     {
       $group: {
         _id: "$department",
-        totalTarget: { $sum: "$targetAmount" }
+        totalTarget: { $sum: "$targetAmount" },
+        months: { $sum: 1 }
       }
     },
 
@@ -205,6 +267,10 @@ const getDepartmentTargets = async () => {
       $project: {
         department: "$_id",
         totalTarget: 1,
+        months: 1,
+        avgMonthlyTarget: {
+          $divide: ["$totalTarget", "$months"]
+        },
         _id: 0
       }
     },
@@ -213,7 +279,6 @@ const getDepartmentTargets = async () => {
 
   ]);
 };
-
 
 module.exports = {
   createTarget,

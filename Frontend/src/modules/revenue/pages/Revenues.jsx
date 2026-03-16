@@ -1,219 +1,504 @@
-// src/modules/revenue/pages/Revenues.jsx
-import { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Plus, Edit, Trash, DollarSign, Home, Users, FileText, Target,
-  BarChart3, Activity, LogOut, Menu, X
+  DollarSign,
+  Plus,
+  Edit,
+  Trash2,
+  Search,
+  TrendingUp,
+  Building2
 } from "lucide-react";
+
 import API from "../../../utils/axios";
-import { useAuth } from "../../../context/AuthContext";
+import Navbar from "../../../components/layout/Navbar";
 
 export default function Revenues() {
+
   const [revenues, setRevenues] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ department: "", month: "", year: "", amount: "" });
+  const [saving, setSaving] = useState(false);
+
+  const [search, setSearch] = useState("");
   const [editId, setEditId] = useState(null);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const [error,setError] = useState("");
+  const [success,setSuccess] = useState("");
 
-  const menuItems = [
-    { title: "Dashboard", icon: <Home size={18} />, route: "/dashboard" },
-    { title: "Clients", icon: <Users size={18} />, route: "/clients" },
-    { title: "Invoices", icon: <FileText size={18} />, route: "/invoices" },
-    { title: "Revenues", icon: <DollarSign size={18} />, route: "/revenues" },
-    { title: "Targets", icon: <Target size={18} />, route: "/targets" },
-    { title: "Forecast", icon: <BarChart3 size={18} />, route: "/forecast" },
-    { title: "Health", icon: <Activity size={18} />, route: "/health" },
+  const [form,setForm] = useState({
+    department:"",
+    month:"",
+    year:"",
+    amount:""
+  });
+
+  const departments = [
+    "sales",
+    "marketing",
+    "finance",
+    "operations",
+    "hr"
   ];
 
-  // ---------------- Fetch All Revenues ----------------
+  /* ================= FETCH ================= */
+
   const fetchRevenues = async () => {
-    setLoading(true);
+
     try {
-      const res = await API.get("/revenues", { headers: { Authorization: `Bearer ${user?.token}` } });
-      setRevenues(Array.isArray(res.data.data?.data) ? res.data.data.data : []);
+
+      setLoading(true);
+
+      const res = await API.get("/revenues");
+
+      const list =
+        res?.data?.data?.data ||
+        res?.data?.data ||
+        [];
+
+      setRevenues(list);
+
     } catch (err) {
+
       console.error(err);
-      if (err.response?.status === 401) {
-        logout(); navigate("/login");
-      }
+      setError("Failed to load revenues");
+
     } finally {
+
       setLoading(false);
+
     }
+
   };
 
-  useEffect(() => { fetchRevenues(); }, [user]);
+  useEffect(() => {
+    fetchRevenues();
+  }, []);
 
-  // ---------------- Form Handlers ----------------
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  /* ================= SEARCH ================= */
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(""); setSuccess("");
+  const filtered = useMemo(() => {
 
-    if (!form.department || !form.month || !form.year || !form.amount) {
+    if (!search) return revenues;
+
+    const s = search.toLowerCase();
+
+    return revenues.filter(r =>
+      r.department?.toLowerCase().includes(s) ||
+      r.year?.toString().includes(s)
+    );
+
+  }, [search,revenues]);
+
+  /* ================= FORM ================= */
+
+  const handleChange = e =>
+    setForm({ ...form,[e.target.name]:e.target.value });
+
+  const resetForm = () => {
+
+    setEditId(null);
+
+    setForm({
+      department:"",
+      month:"",
+      year:"",
+      amount:""
+    });
+
+  };
+
+  /* ================= VALIDATION ================= */
+
+  const validateForm = () => {
+
+    if(!form.department || !form.month || !form.year || !form.amount){
       setError("All fields are required");
-      return;
+      return false;
     }
 
+    if(form.month < 1 || form.month > 12){
+      setError("Month must be between 1-12");
+      return false;
+    }
+
+    return true;
+
+  };
+
+  /* ================= CREATE / UPDATE ================= */
+
+  const handleSubmit = async e => {
+
+    e.preventDefault();
+
+    setError("");
+    setSuccess("");
+
+    if(!validateForm()) return;
+
     try {
-      if (editId) {
-        // Update revenue
-        const res = await API.put(`/revenues/${editId}`, form, { headers: { Authorization: `Bearer ${user?.token}` } });
-        setRevenues(revenues.map(r => r._id === editId ? res.data.data : r));
-        setSuccess("Revenue updated successfully!");
-        setEditId(null);
+
+      setSaving(true);
+
+      const payload = {
+        department: form.department,
+        month: Number(form.month),
+        year: Number(form.year),
+        amount: Number(form.amount)
+      };
+
+      if(editId){
+
+        const res = await API.put(`/revenues/${editId}`,payload);
+
+        setRevenues(prev =>
+          prev.map(r => r._id === editId ? res.data.data : r)
+        );
+
+        setSuccess("Revenue updated successfully");
+
       } else {
-        // Add new revenue
-        const res = await API.post("/revenues", form, { headers: { Authorization: `Bearer ${user?.token}` } });
-        setRevenues([res.data.data, ...revenues]);
-        setSuccess("Revenue added successfully!");
+
+        const res = await API.post("/revenues",payload);
+
+        setRevenues(prev => [res.data.data,...prev]);
+
+        setSuccess("Revenue added successfully");
+
       }
-      setForm({ department: "", month: "", year: "", amount: "" });
+
+      resetForm();
+
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to save revenue");
+
+      setError(
+        err?.response?.data?.message ||
+        "Operation failed"
+      );
+
+    } finally {
+
+      setSaving(false);
+
     }
+
   };
 
-  // ---------------- Edit Revenue ----------------
-  const handleEdit = (rev) => {
-    setForm({ department: rev.department, month: rev.month, year: rev.year, amount: rev.amount });
-    setEditId(rev._id);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  /* ================= DELETE ================= */
 
-  // ---------------- Delete Revenue ----------------
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this revenue record?")) return;
-    try {
-      await API.delete(`/revenues/${id}`, { headers: { Authorization: `Bearer ${user?.token}` } });
-      setRevenues(revenues.filter(r => r._id !== id));
-      setSuccess("Revenue deleted successfully!");
-    } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.message || "Failed to delete revenue");
+  const handleDelete = async id => {
+
+    if(!window.confirm("Delete this revenue record?")) return;
+
+    try{
+
+      await API.delete(`/revenues/${id}`);
+
+      setRevenues(prev =>
+        prev.filter(r => r._id !== id)
+      );
+
+      setSuccess("Revenue deleted");
+
+    }catch{
+
+      setError("Delete failed");
+
     }
+
   };
 
-  const formatCurrency = (amount) =>
-    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount || 0);
+  /* ================= EDIT ================= */
 
-  if (loading) return <div className="flex items-center justify-center h-screen"><p className="animate-pulse">Loading Revenues...</p></div>;
+  const handleEdit = r => {
+
+    setEditId(r._id);
+
+    setForm({
+      department:r.department,
+      month:r.month,
+      year:r.year,
+      amount:r.amount
+    });
+
+    window.scrollTo({top:0,behavior:"smooth"});
+
+  };
+
+  /* ================= ANALYTICS ================= */
+
+  const totalRevenue = useMemo(() =>
+    revenues.reduce((acc,r)=> acc + r.amount,0)
+  ,[revenues]);
+
+  const departmentCount = useMemo(() =>
+    new Set(revenues.map(r=>r.department)).size
+  ,[revenues]);
+
+  const formatCurrency = amount =>
+    new Intl.NumberFormat("en-IN",{
+      style:"currency",
+      currency:"INR"
+    }).format(amount || 0);
+
+  /* ================= LOADING ================= */
+
+  if(loading){
+    return(
+      <div className="flex items-center justify-center h-screen text-white bg-gray-950">
+        Loading Revenue Data...
+      </div>
+    );
+  }
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
 
-      {/* ---------------- Sidebar ---------------- */}
-      <aside className={`bg-white shadow-lg fixed h-full transition-all duration-300 z-20 ${sidebarOpen ? "w-64" : "w-16"}`}>
-        <div className="flex items-center justify-between p-4 border-b">
-          {sidebarOpen && <h2 className="text-lg font-bold text-indigo-600">ReadyTech CRM</h2>}
-          <button onClick={() => setSidebarOpen(!sidebarOpen)}><Menu size={20} /></button>
+    <div className="min-h-screen text-white bg-gray-950">
+
+      <Navbar/>
+
+      <div className="w-full px-6 py-10 space-y-8">
+
+        {/* HEADER */}
+
+        <div>
+
+          <h1 className="text-3xl font-bold">
+            Revenue Analytics
+          </h1>
+
+          <p className="text-gray-400">
+            Track financial performance across departments
+          </p>
+
         </div>
 
-        <nav className="flex flex-col gap-2 px-2 mt-6">
-          {menuItems.map((item) => {
-            const active = location.pathname === item.route;
-            return (
-              <button
-                key={item.title}
-                onClick={() => navigate(item.route)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition
-                  ${active ? "bg-indigo-100 text-indigo-600 font-semibold" : "text-gray-600 hover:bg-gray-100"}
-                  ${!sidebarOpen ? "justify-center" : ""}`}
-              >
-                {item.icon}
-                {sidebarOpen && item.title}
-              </button>
-            );
-          })}
-        </nav>
+        {/* ALERTS */}
 
-        <div className="absolute bottom-0 w-full p-4 text-xs text-center text-gray-400">
-          {sidebarOpen && "Powered by ReadyTech Solutions"}
-        </div>
-      </aside>
-
-      {/* ---------------- Main Content ---------------- */}
-      <div className="flex flex-col flex-1" style={{ marginLeft: sidebarOpen ? "16rem" : "4rem" }}>
-        {/* Header */}
-        <header className="flex items-center justify-between px-6 py-4 bg-white shadow">
-          <h1 className="text-xl font-bold">{editId ? "Edit Revenue" : "Revenues"}</h1>
-          <div className="flex items-center gap-4">
-            <span className="font-medium text-gray-700">Welcome, {user?.name}</span>
-            <button
-              onClick={() => { logout(); navigate("/login"); }}
-              className="flex items-center gap-2 px-3 py-2 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
-            >
-              <LogOut size={16} /> Logout
-            </button>
+        {error && (
+          <div className="p-3 text-red-400 border border-red-700 rounded-lg bg-red-900/20">
+            {error}
           </div>
-        </header>
+        )}
 
-        <main className="p-6 space-y-6">
+        {success && (
+          <div className="p-3 text-green-400 border border-green-700 rounded-lg bg-green-900/20">
+            {success}
+          </div>
+        )}
 
-          {/* Add/Edit Revenue Form */}
-          <section className="relative p-6 bg-white shadow rounded-2xl">
-            {editId && (
-              <button
-                onClick={() => { setEditId(null); setForm({ department: "", month: "", year: "", amount: "" }); }}
-                className="absolute p-2 bg-gray-200 rounded-full top-4 right-4 hover:bg-gray-300"
-              ><X size={16} /></button>
-            )}
+        {/* ANALYTICS */}
 
-            <h2 className="flex items-center gap-2 mb-4 text-xl font-bold"><Plus size={20} /> {editId ? "Edit Revenue" : "Add Revenue"}</h2>
-            {error && <p className="mb-3 text-red-600">{error}</p>}
-            {success && <p className="mb-3 text-green-600">{success}</p>}
+        <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-4">
 
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-5">
-              <input type="text" name="department" value={form.department} onChange={handleChange} placeholder="Department" className="p-3 border rounded-lg focus:ring-2 focus:ring-indigo-400"/>
-              <input type="number" name="month" value={form.month} onChange={handleChange} placeholder="Month (1-12)" className="p-3 border rounded-lg focus:ring-2 focus:ring-indigo-400"/>
-              <input type="number" name="year" value={form.year} onChange={handleChange} placeholder="Year" className="p-3 border rounded-lg focus:ring-2 focus:ring-indigo-400"/>
-              <input type="number" name="amount" value={form.amount} onChange={handleChange} placeholder="Amount" className="p-3 border rounded-lg focus:ring-2 focus:ring-indigo-400"/>
-              <button type="submit" className="flex items-center justify-center col-span-1 gap-2 px-6 py-3 text-white transition bg-indigo-600 md:col-span-5 rounded-xl hover:bg-indigo-700">
-                <Plus size={16} /> {editId ? "Update Revenue" : "Add Revenue"}
-              </button>
-            </form>
-          </section>
+          <StatCard
+            icon={<DollarSign/>}
+            title="Total Revenue"
+            value={formatCurrency(totalRevenue)}
+          />
 
-          {/* Revenue Table */}
-          <section className="p-6 overflow-x-auto bg-white shadow rounded-2xl">
-            <h2 className="flex items-center gap-2 mb-4 text-xl font-bold"><DollarSign size={20} /> Revenue List</h2>
-            <table className="w-full border-collapse table-auto">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="p-3 text-left text-gray-600">Department</th>
-                  <th className="p-3 text-left text-gray-600">Month</th>
-                  <th className="p-3 text-left text-gray-600">Year</th>
-                  <th className="p-3 text-left text-gray-600">Amount</th>
-                  <th className="p-3 text-left text-gray-600">Actions</th>
+          <StatCard
+            icon={<Building2/>}
+            title="Departments"
+            value={departmentCount}
+          />
+
+          <StatCard
+            icon={<TrendingUp/>}
+            title="Records"
+            value={revenues.length}
+          />
+
+        </div>
+
+        {/* FORM */}
+
+        <div className="p-6 border bg-gray-900 rounded-xl border-gray-800">
+
+          <h2 className="mb-5 text-lg font-semibold">
+
+            {editId ? "Edit Revenue" : "Add Revenue"}
+
+          </h2>
+
+          <form
+            onSubmit={handleSubmit}
+            className="grid gap-4 md:grid-cols-5"
+          >
+
+            <select
+              name="department"
+              value={form.department}
+              onChange={handleChange}
+              className="p-3 bg-gray-800 border border-gray-700 rounded-lg"
+            >
+
+              <option value="">Select Department</option>
+
+              {departments.map(dep=>(
+                <option key={dep} value={dep}>
+                  {dep}
+                </option>
+              ))}
+
+            </select>
+
+            <Input name="month" type="number" value={form.month} onChange={handleChange} placeholder="Month"/>
+            <Input name="year" type="number" value={form.year} onChange={handleChange} placeholder="Year"/>
+            <Input name="amount" type="number" value={form.amount} onChange={handleChange} placeholder="Amount"/>
+
+            <button
+              disabled={saving}
+              className="flex items-center justify-center gap-2 px-4 py-3 font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 disabled:opacity-50"
+            >
+
+              <Plus size={16}/>
+
+              {saving ? "Saving..." : editId ? "Update" : "Add"}
+
+            </button>
+
+          </form>
+
+        </div>
+
+        {/* SEARCH */}
+
+        <div className="flex items-center gap-3 p-4 border bg-gray-900 rounded-xl border-gray-800">
+
+          <Search size={18}/>
+
+          <input
+            placeholder="Search department or year..."
+            value={search}
+            onChange={e=>setSearch(e.target.value)}
+            className="flex-1 bg-transparent outline-none"
+          />
+
+        </div>
+
+        {/* TABLE */}
+
+        <div className="border bg-gray-900 rounded-xl border-gray-800">
+
+          <div className="overflow-x-auto">
+
+            <table className="w-full text-sm">
+
+              <thead className="text-gray-400 border-b border-gray-800">
+
+                <tr>
+
+                  <th className="p-4 text-left">Department</th>
+                  <th className="p-4 text-center">Month</th>
+                  <th className="p-4 text-center">Year</th>
+                  <th className="p-4 text-center">Revenue</th>
+                  <th className="p-4 text-center">Actions</th>
+
                 </tr>
+
               </thead>
+
               <tbody>
-                {revenues.length === 0 ? (
-                  <tr><td colSpan={5} className="p-3 text-center text-gray-500">No revenue records found</td></tr>
-                ) : revenues.map(r => (
-                  <tr key={r._id} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-medium">{r.department}</td>
-                    <td className="p-3">{r.month}</td>
-                    <td className="p-3">{r.year}</td>
-                    <td className="p-3 font-semibold">{formatCurrency(r.amount)}</td>
-                    <td className="flex gap-2 p-3">
-                      <button onClick={() => handleEdit(r)} className="p-2 text-blue-600 rounded-lg hover:bg-blue-100"><Edit size={16} /></button>
-                      <button onClick={() => handleDelete(r._id)} className="p-2 text-red-600 rounded-lg hover:bg-red-100"><Trash size={16} /></button>
+
+                {filtered.length === 0 ? (
+
+                  <tr>
+                    <td colSpan="5" className="p-6 text-center text-gray-400">
+                      No revenue records found
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
 
-        </main>
+                ) : (
+
+                  filtered.map(r => (
+
+                    <tr
+                      key={r._id}
+                      className="border-b border-gray-800 hover:bg-gray-800"
+                    >
+
+                      <td className="p-4 capitalize">{r.department}</td>
+
+                      <td className="p-4 text-center">{r.month}</td>
+
+                      <td className="p-4 text-center">{r.year}</td>
+
+                      <td className="p-4 text-center text-green-400">
+                        {formatCurrency(r.amount)}
+                      </td>
+
+                      <td className="flex justify-center gap-4 p-4">
+
+                        <button
+                          onClick={()=>handleEdit(r)}
+                          className="text-blue-400 hover:text-blue-300"
+                        >
+                          <Edit size={16}/>
+                        </button>
+
+                        <button
+                          onClick={()=>handleDelete(r._id)}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          <Trash2 size={16}/>
+                        </button>
+
+                      </td>
+
+                    </tr>
+
+                  ))
+
+                )}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        </div>
+
       </div>
+
     </div>
+
   );
+
+}
+
+/* ================= COMPONENTS ================= */
+
+function StatCard({icon,title,value}){
+
+  return(
+
+    <div className="p-6 border bg-gray-900 rounded-xl border-gray-800">
+
+      <div className="flex items-center gap-2 text-gray-400">
+        {icon}
+        {title}
+      </div>
+
+      <h2 className="mt-2 text-2xl font-bold">
+        {value}
+      </h2>
+
+    </div>
+
+  );
+
+}
+
+function Input(props){
+
+  return(
+
+    <input
+      {...props}
+      className="p-3 bg-gray-800 border border-gray-700 rounded-lg"
+    />
+
+  );
+
 }

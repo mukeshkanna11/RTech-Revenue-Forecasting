@@ -3,138 +3,182 @@ const revenueService = require("./revenue.service");
 const ApiError = require("../../utils/ApiError");
 
 /**
- * ===============================
- * Create Revenue
+ * =====================================
+ * CREATE REVENUE
  * POST /api/v1/revenues
- * ===============================
+ * =====================================
  */
 const createRevenue = asyncHandler(async (req, res) => {
+
   const revenue = await revenueService.createRevenue(req.body);
 
   res.status(201).json({
     success: true,
+    message: "Revenue created successfully",
     data: revenue
   });
+
 });
 
+
 /**
- * ===============================
- * Get All Revenues (Pagination)
+ * =====================================
+ * GET ALL REVENUES
  * GET /api/v1/revenues
- * ===============================
+ * =====================================
  */
 const getAllRevenues = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
 
-  const revenues = await revenueService.getAllRevenue({
-    page: Number(page),
-    limit: Number(limit)
-  });
+  const result = await revenueService.getAllRevenue(req.query);
 
   res.status(200).json({
     success: true,
-    data: revenues
+    ...result
   });
+
 });
 
+
 /**
- * ===============================
- * Get Revenue By ID
+ * =====================================
+ * GET REVENUE BY ID
  * GET /api/v1/revenues/:id
- * ===============================
+ * =====================================
  */
 const getRevenueById = asyncHandler(async (req, res) => {
-  const revenue = await revenueService.getRevenueById(req.params.id);
 
-  if (!revenue) {
-    throw new ApiError(404, "Revenue not found");
-  }
+  const revenue = await revenueService.getRevenueById(req.params.id);
 
   res.status(200).json({
     success: true,
     data: revenue
   });
+
 });
 
+
 /**
- * ===============================
- * Update Revenue
+ * =====================================
+ * UPDATE REVENUE
  * PUT /api/v1/revenues/:id
- * ===============================
+ * =====================================
  */
 const updateRevenue = asyncHandler(async (req, res) => {
-  const updated = await revenueService.updateRevenue(
+
+  const updatedRevenue = await revenueService.updateRevenue(
     req.params.id,
     req.body
   );
 
-  if (!updated) {
-    throw new ApiError(404, "Revenue not found");
-  }
-
   res.status(200).json({
     success: true,
-    data: updated
+    message: "Revenue updated successfully",
+    data: updatedRevenue
   });
+
 });
 
+
 /**
- * ===============================
- * Delete Revenue (Soft Delete)
+ * =====================================
+ * DELETE REVENUE (SOFT DELETE)
  * DELETE /api/v1/revenues/:id
- * ===============================
+ * =====================================
  */
 const deleteRevenue = asyncHandler(async (req, res) => {
-  const deleted = await revenueService.softDeleteRevenue(req.params.id);
 
-  if (!deleted) {
-    throw new ApiError(404, "Revenue not found");
-  }
+  await revenueService.softDeleteRevenue(req.params.id);
 
   res.status(200).json({
     success: true,
     message: "Revenue deleted successfully"
   });
+
 });
 
+
 /**
- * ===============================
- * Forecast Revenue
+ * =====================================
+ * REVENUE TREND (Charts)
+ * GET /api/v1/revenues/trend
+ * =====================================
+ */
+const getRevenueTrend = asyncHandler(async (req, res) => {
+
+  const trend = await revenueService.getRevenueTrend();
+
+  res.status(200).json({
+    success: true,
+    data: trend
+  });
+
+});
+
+
+/**
+ * =====================================
+ * DEPARTMENT REVENUE ANALYTICS
+ * GET /api/v1/revenues/department
+ * =====================================
+ */
+const getDepartmentRevenue = asyncHandler(async (req, res) => {
+
+  const analytics = await revenueService.getDepartmentRevenue();
+
+  res.status(200).json({
+    success: true,
+    data: analytics
+  });
+
+});
+
+
+/**
+ * =====================================
+ * FORECAST REVENUE
  * GET /api/v1/revenues/forecast
- * ===============================
+ * =====================================
  */
 const getForecast = asyncHandler(async (req, res) => {
-  const forecast = await revenueService.getForecast();
+
+  const months = Number(req.query.months) || 3;
+
+  const forecast = await revenueService.getForecast(months);
 
   res.status(200).json({
     success: true,
     data: forecast
   });
+
 });
 
+
 /**
- * ===============================
- * Compare Target vs Revenue
+ * =====================================
+ * TARGET VS REVENUE COMPARISON
  * GET /api/v1/revenues/compare
- * ===============================
+ * =====================================
  */
 const compareTarget = asyncHandler(async (req, res) => {
+
   const { month, year } = req.query;
 
   if (!month || !year) {
-    throw new ApiError(400, "Month and year required");
+    throw new ApiError(400, "Month and year are required");
   }
 
-  const data = await revenueService.compareTargetVsRevenue(
+  const result = await revenueService.compareTargetVsRevenue(
     Number(month),
     Number(year)
   );
 
   res.status(200).json({
     success: true,
-    data
+    data: result
   });
+
 });
+
 
 module.exports = {
   createRevenue,
@@ -142,6 +186,8 @@ module.exports = {
   getRevenueById,
   updateRevenue,
   deleteRevenue,
+  getRevenueTrend,
+  getDepartmentRevenue,
   getForecast,
   compareTarget
 };

@@ -1,16 +1,32 @@
 const Joi = require("joi");
 
-exports.targetSchema = Joi.object({
-  month: Joi.number().integer().min(1).max(12).required(),
-  year: Joi.number().integer().min(2000).required(),
-  department: Joi.string().trim().min(2).max(100).required(),
-  targetAmount: Joi.number().positive().required()
-});
+const createTargetSchema = {
+  body: Joi.object({
+    month: Joi.number().min(1).max(12).required(),
+    year: Joi.number().required(),
+    department: Joi.string()
+      .valid("sales", "marketing", "engineering", "finance", "hr", "operations")
+      .required(),
+    targetAmount: Joi.number().min(0).required()
+  })
+};
 
-// 🔥 Partial update schema
-exports.updateTargetSchema = Joi.object({
-  month: Joi.number().integer().min(1).max(12),
-  year: Joi.number().integer().min(2000),
-  department: Joi.string().trim().min(2).max(100),
-  targetAmount: Joi.number().positive()
-}).min(1); // at least one field required
+const updateTargetSchema = {
+  body: Joi.object({
+    month: Joi.number().min(1).max(12),
+    year: Joi.number(),
+    department: Joi.string().valid(
+      "sales",
+      "marketing",
+      "finance",
+      "hr",
+      "operations"
+    ),
+    targetAmount: Joi.number().min(0)
+  })
+};
+
+module.exports = {
+  createTargetSchema,
+  updateTargetSchema
+};

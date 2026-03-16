@@ -1,24 +1,71 @@
 const express = require("express");
-const {
-  createTarget,
-  getAllTargets,
-  getTargetById,
-  updateTarget,
-  deleteTarget
-} = require("./target.controller");
+
+const controller = require("./target.controller");
 
 const { protect } = require("../../middlewares/auth.middleware");
 const { authorize } = require("../../middlewares/role.middleware");
+const validate = require("../../middlewares/validate.middleware");
+const { createTargetSchema, updateTargetSchema } = require("./target.validation");
 
 const router = express.Router();
 
-/* Admin Only */
-router.post("/", protect, authorize("admin"), createTarget);
-router.put("/:id", protect, authorize("admin"), updateTarget);
-router.delete("/:id", protect, authorize("admin"), deleteTarget);
+/**
+ * =====================================
+ * ADMIN ROUTES
+ * =====================================
+ */
 
-/* All Logged Users */
-router.get("/", protect, getAllTargets);
-router.get("/:id", protect, getTargetById);
+router.post(
+  "/",
+  protect,
+  authorize("admin"),
+  validate(createTargetSchema),
+  controller.createTarget
+);
+
+router.put(
+  "/:id",
+  protect,
+  authorize("admin"),
+  validate(updateTargetSchema),
+  controller.updateTarget
+);
+
+router.delete(
+  "/:id",
+  protect,
+  authorize("admin"),
+  controller.deleteTarget
+);
+
+/**
+ * =====================================
+ * USER ROUTES
+ * =====================================
+ */
+
+router.get(
+  "/",
+  protect,
+  controller.getAllTargets
+);
+
+router.get(
+  "/:id",
+  protect,
+  controller.getTargetById
+);
+
+router.get(
+  "/analytics/department",
+  protect,
+  controller.departmentTargets
+);
+
+router.get(
+  "/analytics/target-vs-revenue",
+  protect,
+  controller.targetVsRevenue
+);
 
 module.exports = router;

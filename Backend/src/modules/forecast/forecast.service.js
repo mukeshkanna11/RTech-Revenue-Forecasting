@@ -1,165 +1,36 @@
+// ==========================
+// forecast.service.js (SaaS-level robust)
+// ==========================
 const Revenue = require("../revenue/revenue.model");
 const ApiError = require("../../utils/ApiError");
+const {
+  generateFutureMonths,
+  movingAverageForecast,
+  weightedMovingAverageForecast,
+  growthTrendForecast
+} = require("./forecast.helpers");
 
 /**
- * =================================================
- * HELPER: Generate Next Months Labels
- * =================================================
+ * Forecast revenue (global)
  */
-
-const generateFutureMonths = (count) => {
-  const months = [];
-  const now = new Date();
-
-  for (let i = 1; i <= count; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-
-    months.push({
-      month: d.getMonth() + 1,
-      year: d.getFullYear()
-    });
-  }
-
-  return months;
-};
-
-/**
- * =================================================
- * MOVING AVERAGE FORECAST
- * =================================================
- */
-
-const movingAverageForecast = (data, periods = 3, months = 6) => {
-
-  const forecasts = [];
-  let dataset = [...data];
-
-  for (let i = 0; i < months; i++) {
-
-    const last = dataset.slice(-periods);
-
-    const avg =
-      last.reduce((a, b) => a + b, 0) / last.length;
-
-    const predicted = Math.round(avg);
-
-    forecasts.push(predicted);
-
-    dataset.push(predicted);
-  }
-
-  return forecasts;
-};
-
-/**
- * =================================================
- * WEIGHTED MOVING AVERAGE FORECAST
- * =================================================
- */
-
-const weightedMovingAverageForecast = (
-  data,
-  weights = [0.5, 0.3, 0.2],
-  months = 6
-) => {
-
-  const forecasts = [];
-  let dataset = [...data];
-
-  const periods = weights.length;
-
-  for (let i = 0; i < months; i++) {
-
-    const last = dataset.slice(-periods);
-
-    let prediction = 0;
-
-    for (let j = 0; j < last.length; j++) {
-
-      prediction += last[j] * weights[j];
-
-    }
-
-    prediction = Math.round(prediction);
-
-    forecasts.push(prediction);
-
-    dataset.push(prediction);
-  }
-
-  return forecasts;
-};
-
-/**
- * =================================================
- * GROWTH TREND FORECAST
- * =================================================
- */
-
-const growthTrendForecast = (data, months = 6) => {
-
-  const forecasts = [];
-  let lastValue = data[data.length - 1];
-
-  const growthRates = [];
-
-  for (let i = 1; i < data.length; i++) {
-
-    const prev = data[i - 1];
-    const curr = data[i];
-
-    if (prev > 0) {
-      growthRates.push((curr - prev) / prev);
-    }
-  }
-
-  const avgGrowth =
-    growthRates.reduce((a, b) => a + b, 0) /
-    (growthRates.length || 1);
-
-  for (let i = 0; i < months; i++) {
-
-    lastValue = lastValue * (1 + avgGrowth);
-
-    forecasts.push(Math.round(lastValue));
-  }
-
-  return forecasts;
-};
-
-/**
- * =================================================
- * MAIN FORECAST ENGINE
- * =================================================
- */
-
 const forecastRevenue = async (months = 6) => {
+  const revenues = await Revenue.find({ isDeleted: false }).sort({ year: 1, month: 1 });
 
-  const revenues = await Revenue.find({
-    isDeleted: false
-  }).sort({ year: 1, month: 1 });
-
-  if (revenues.length < 3) {
-    throw new ApiError(
-      400,
-      "Minimum 3 months revenue required for forecasting"
-    );
+  if (!revenues || revenues.length < 1) {
+    throw new ApiError(400, "At least 1 month of revenue required for forecasting.");
   }
 
-  const amounts = revenues.map((r) => r.amount);
+  const amounts = revenues.map(r => r.amount);
+  const forecastMonths = generateFutureMonths(months);
 
-  const movingAvg =
-    movingAverageForecast(amounts, 3, months);
+  // Use available data, fallback if < 3 months
+  const periods = Math.min(3, amounts.length);
 
-  const weightedAvg =
-    weightedMovingAverageForecast(amounts, [0.5, 0.3, 0.2], months);
+  const movingAvg = movingAverageForecast(amounts, periods, months);
+  const weightedAvg = weightedMovingAverageForecast(amounts, [0.5, 0.3, 0.2].slice(0, periods), months);
+  const trend = growthTrendForecast(amounts, months);
 
-  const trend =
-    growthTrendForecast(amounts, months);
-
-  const futureMonths = generateFutureMonths(months);
-
-  const forecast = futureMonths.map((m, i) => ({
+  const forecast = forecastMonths.map((m, i) => ({
     month: m.month,
     year: m.year,
     movingAverage: movingAvg[i],
@@ -167,58 +38,47 @@ const forecastRevenue = async (months = 6) => {
     trendForecast: trend[i]
   }));
 
-  return {
-    history: revenues,
-    forecast
-  };
+  return { history: revenues, forecast };
 };
 
 /**
- * =================================================
- * DEPARTMENT FORECAST
- * =================================================
+ * Forecast by department (robust, even < 3 months)
  */
+const forecastByDepartment = async (department, months = 6) => {
+  if (!department) throw new ApiError(400, "Department is required.");
 
-const forecastByDepartment = async (
-  department,
-  months = 6
-) => {
+  const revenues = await Revenue.find({ department, isDeleted: false }).sort({ year: 1, month: 1 });
 
-  const revenues = await Revenue.find({
-    department,
-    isDeleted: false
-  }).sort({ year: 1, month: 1 });
+  const dataCount = revenues.length;
 
-  if (revenues.length < 3) {
+  const forecastMonths = generateFutureMonths(months);
 
-    throw new ApiError(
-      400,
-      "Not enough data for department forecast"
-    );
+  if (dataCount === 0) {
+    // No data at all, return zeros
+    return forecastMonths.map(m => ({
+      department,
+      month: m.month,
+      year: m.year,
+      predictedRevenue: 0,
+      note: "No historical data available"
+    }));
   }
 
-  const amounts = revenues.map((r) => r.amount);
+  const amounts = revenues.map(r => r.amount);
 
-  const forecast =
-    movingAverageForecast(amounts, 3, months);
+  // Determine periods dynamically (use available data if < 3 months)
+  const periods = Math.min(3, amounts.length);
 
-  const futureMonths = generateFutureMonths(months);
+  const forecastValues = movingAverageForecast(amounts, periods, months);
 
-  return futureMonths.map((m, i) => ({
+  return forecastMonths.map((m, i) => ({
     department,
     month: m.month,
     year: m.year,
-    predictedRevenue: forecast[i]
+    predictedRevenue: forecastValues[i],
+    dataPointsUsed: dataCount, // Show how many months of data were used
+    note: dataCount < 3 ? "Forecast based on limited data" : "Forecast based on full data"
   }));
 };
 
-/**
- * =================================================
- * EXPORTS
- * =================================================
- */
-
-module.exports = {
-  forecastRevenue,
-  forecastByDepartment
-};
+module.exports = { forecastRevenue, forecastByDepartment };
