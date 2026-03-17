@@ -15,7 +15,9 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
-  "https://rts-revenue-forecasting.netlify.app"
+  "https://rts-revenue-forecasting.netlify.app",
+  "https://readytech-revenue.netlify.app/",
+  "https://rtech-revenue-forecasting.onrender.com"
 ];
 
 /* ========================

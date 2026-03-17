@@ -43,9 +43,6 @@ const InvoicePDF = lazy(() =>
   import("../modules/invoices/pages/InvoicePDF")
 );
 
-const Health = lazy(() =>
-  import("../modules/health/pages/Health")
-);
 
 /* ================================
    Loader
@@ -145,16 +142,6 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <InvoicePDF />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Health */}
-        <Route
-          path="/health"
-          element={
-            <ProtectedRoute>
-              <Health />
             </ProtectedRoute>
           }
         />
