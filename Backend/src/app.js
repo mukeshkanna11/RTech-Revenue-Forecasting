@@ -2,23 +2,18 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
-const dotenv = require("dotenv");
 const routes = require("./routes");
 const { errorHandler } = require("./middlewares/error.middleware");
 
 const app = express();
 
 /* ========================
-   Allowed Origins
+   Allowed Origins (ENV BASED)
 ======================== */
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "https://rts-revenue-forecasting.netlify.app",
-  "https://readytech-revenue.netlify.app/",
-  "https://rtech-revenue-forecasting.onrender.com"
-];
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",")
+  : [];
 
 /* ========================
    Global Middlewares
@@ -29,18 +24,33 @@ app.use(helmet());
 app.use(
   cors({
     origin: function (origin, callback) {
-      // allow requests with no origin (like mobile apps / Postman)
+      console.log("🌐 Incoming Origin:", origin);
+
+      // allow non-browser clients (Postman, mobile apps)
       if (!origin) return callback(null, true);
 
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
+      // normalize origin (remove trailing slash)
+      const normalizedOrigin = origin.replace(/\/$/, "");
+
+      const isAllowed = allowedOrigins.some(
+        (o) => o.replace(/\/$/, "") === normalizedOrigin
+      );
+
+      if (isAllowed) {
+        return callback(null, true);
       }
+
+      console.error("❌ Blocked by CORS:", origin);
+      return callback(new Error("Not allowed by CORS"));
     },
-    credentials: true
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
   })
 );
+
+/* ✅ Handle Preflight Requests */
+app.options("*", cors());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -53,7 +63,18 @@ if (process.env.NODE_ENV !== "production") {
    API Routes
 ======================== */
 
-app.use(routes);
+app.use("/api/v1", routes);
+
+/* ========================
+   Health Check (IMPORTANT)
+======================== */
+
+app.get("/", (req, res) => {
+  res.json({
+    success: true,
+    message: "API is running 🚀"
+  });
+});
 
 /* ========================
    404 Handler
