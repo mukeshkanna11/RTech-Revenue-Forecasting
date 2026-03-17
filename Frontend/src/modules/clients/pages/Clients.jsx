@@ -137,20 +137,42 @@ setError(err?.response?.data?.message || "Save failed");
 
 /* ================= EDIT ================= */
 
-const handleEdit = (client)=>{
+const normalizePhone = (phone) => {
+  if (!phone) return "";
 
-setEditId(client._id);
+  // Remove spaces, dashes, non-numeric chars
+  const cleaned = phone.toString().replace(/\D/g, "");
 
-setForm({
-name:client.name || "",
-companyName:client.companyName || "",
-email:client.email || "",
-phone:client.phone || "",
-address:client.address || ""
-});
+  // Optional: enforce max length (India = 10 digits)
+  return cleaned.slice(0, 10);
+};
 
-window.scrollTo({top:0,behavior:"smooth"});
+const handleEdit = (client) => {
+  if (!client || !client._id) {
+    console.error("Invalid client data:", client);
+    return;
+  }
 
+  try {
+    setEditId(client._id);
+
+    setForm({
+      name: client.name?.trim() || "",
+      companyName: client.companyName?.trim() || "",
+      email: client.email?.toLowerCase().trim() || "",
+      phone: normalizePhone(client.phone),
+      address: client.address?.trim() || "",
+    });
+
+    // Smooth UX scroll
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+
+  } catch (error) {
+    console.error("Error in handleEdit:", error);
+  }
 };
 
 

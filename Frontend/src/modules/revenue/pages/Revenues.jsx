@@ -312,7 +312,7 @@ export default function Revenues() {
 
         {/* FORM */}
 
-        <div className="p-6 border bg-gray-900 rounded-xl border-gray-800">
+        <div className="p-6 bg-gray-900 border border-gray-800 rounded-xl">
 
           <h2 className="mb-5 text-lg font-semibold">
 
@@ -363,7 +363,7 @@ export default function Revenues() {
 
         {/* SEARCH */}
 
-        <div className="flex items-center gap-3 p-4 border bg-gray-900 rounded-xl border-gray-800">
+        <div className="flex items-center gap-3 p-4 bg-gray-900 border border-gray-800 rounded-xl">
 
           <Search size={18}/>
 
@@ -378,7 +378,7 @@ export default function Revenues() {
 
         {/* TABLE */}
 
-        <div className="border bg-gray-900 rounded-xl border-gray-800">
+        <div className="bg-gray-900 border border-gray-800 rounded-xl">
 
           <div className="overflow-x-auto">
 
@@ -473,7 +473,7 @@ function StatCard({icon,title,value}){
 
   return(
 
-    <div className="p-6 border bg-gray-900 rounded-xl border-gray-800">
+    <div className="p-6 bg-gray-900 border border-gray-800 rounded-xl">
 
       <div className="flex items-center gap-2 text-gray-400">
         {icon}

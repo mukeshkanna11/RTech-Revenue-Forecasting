@@ -741,7 +741,7 @@ className="p-3 text-white transition bg-gray-800 border border-gray-700 rounded-
 <option value="sales">Sales</option>
 <option value="marketing">Marketing</option>
 <option value="operations">Operations</option>
-<option value="engineering">Engineering</option>
+<option value="hr">Hr</option>
 <option value="finance">Finance</option>
 
 </select>
@@ -800,21 +800,21 @@ Create Target
 
         {/* SEARCH */}
         <div className="relative w-full md:w-72">
-          <Search className="absolute w-4 h-4 text-gray-400 top-1/2 left-3 -translate-y-1/2" />
+          <Search className="absolute w-4 h-4 text-gray-400 -translate-y-1/2 top-1/2 left-3" />
           <input
             type="text"
             placeholder="Search department..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-3 py-3 text-sm text-white bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500"
+            className="w-full py-3 pl-10 pr-3 text-sm text-white bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500"
           />
         </div>
       </div>
 
       {/* TABLE */}
-      <div className="overflow-x-auto rounded-lg border border-gray-800">
+      <div className="overflow-x-auto border border-gray-800 rounded-lg">
         <table className="w-full text-sm">
-          <thead className="text-xs text-gray-400 uppercase border-b border-gray-800 bg-gray-900">
+          <thead className="text-xs text-gray-400 uppercase bg-gray-900 border-b border-gray-800">
             <tr>
               <th className="px-4 py-3">Department</th>
               <th className="px-4 py-3">Month</th>
@@ -890,7 +890,7 @@ Create Target
                         name="targetAmount"
                         value={editForm.targetAmount}
                         onChange={handleEditChange}
-                        className="w-28 px-2 py-1 text-sm text-white bg-gray-800 border border-gray-700 rounded focus:outline-none"
+                        className="px-2 py-1 text-sm text-white bg-gray-800 border border-gray-700 rounded w-28 focus:outline-none"
                       />
                     ) : (
                       `₹${t.targetAmount.toLocaleString()}`
@@ -911,13 +911,13 @@ Create Target
                         <>
                           <button
                             onClick={() => handleSaveEdit(t._id)}
-                            className="px-3 py-1 text-xs text-green-300 bg-green-900 rounded hover:bg-green-800 transition"
+                            className="px-3 py-1 text-xs text-green-300 transition bg-green-900 rounded hover:bg-green-800"
                           >
                             Save
                           </button>
                           <button
                             onClick={handleCancelEdit}
-                            className="px-3 py-1 text-xs text-gray-300 bg-gray-800 rounded hover:bg-gray-700 transition"
+                            className="px-3 py-1 text-xs text-gray-300 transition bg-gray-800 rounded hover:bg-gray-700"
                           >
                             Cancel
                           </button>
@@ -926,13 +926,13 @@ Create Target
                         <>
                           <button
                             onClick={() => handleEditClick(t)}
-                            className="px-3 py-1 text-xs text-yellow-300 bg-yellow-900 rounded hover:bg-yellow-800 transition flex items-center gap-1"
+                            className="flex items-center gap-1 px-3 py-1 text-xs text-yellow-300 transition bg-yellow-900 rounded hover:bg-yellow-800"
                           >
                             <Edit2 className="w-3 h-3" /> Edit
                           </button>
                           <button
                             onClick={() => handleDelete(t._id)}
-                            className="px-3 py-1 text-xs text-red-300 bg-red-900 rounded hover:bg-red-800 transition flex items-center gap-1"
+                            className="flex items-center gap-1 px-3 py-1 text-xs text-red-300 transition bg-red-900 rounded hover:bg-red-800"
                           >
                             <Trash2 className="w-3 h-3" /> Delete
                           </button>
