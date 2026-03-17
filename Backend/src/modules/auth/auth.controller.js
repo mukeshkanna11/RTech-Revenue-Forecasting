@@ -1,13 +1,12 @@
 const { registerUser, loginUser } = require("./auth.service");
 
 /**
- * Register Controller
+ * @desc Register User
  */
 exports.register = async (req, res, next) => {
   try {
     const { name, email, password, role } = req.body;
 
-    // basic validation
     if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
@@ -15,12 +14,7 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    const result = await registerUser({
-      name,
-      email,
-      password,
-      role
-    });
+    const result = await registerUser({ name, email, password, role });
 
     return res.status(201).json({
       success: true,
@@ -29,19 +23,19 @@ exports.register = async (req, res, next) => {
     });
 
   } catch (error) {
+    console.error("Register Error:", error.message);
     next(error);
   }
 };
 
 
 /**
- * Login Controller
+ * @desc Login User
  */
 exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    // validation
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -59,6 +53,7 @@ exports.login = async (req, res, next) => {
     });
 
   } catch (error) {
+    console.error("Login Error:", error.message);
     next(error);
   }
 };

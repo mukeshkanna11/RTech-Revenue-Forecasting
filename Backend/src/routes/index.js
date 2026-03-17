@@ -3,8 +3,7 @@ const router = express.Router();
 
 /**
  * ==========================================
- * Import All Module Routes
- * Each module exports a proper router
+ * Import Module Routes
  * ==========================================
  */
 const authRoutes = require("../modules/auth/auth.routes");
@@ -17,18 +16,11 @@ const invoiceRoutes = require("../modules/invoice/invoice.routes");
 
 /**
  * ==========================================
- * API VERSION
- * ==========================================
- */
-const API_VERSION = "/api/v1";
-
-/**
- * ==========================================
  * HEALTH CHECK
  * GET /api/v1/health
  * ==========================================
  */
-router.get(`${API_VERSION}/health`, (req, res) => {
+router.get("/health", (req, res) => {
   res.status(200).json({
     success: true,
     message: "Revenue Forecast API running successfully 🚀",
@@ -40,22 +32,21 @@ router.get(`${API_VERSION}/health`, (req, res) => {
 
 /**
  * ==========================================
- * MODULE ROUTES REGISTRATION
- * Base paths follow: /api/v1/{module}
- * Each route file must export an express.Router()
+ * MODULE ROUTES
+ * Base paths: /api/v1/{module}
  * ==========================================
  */
-router.use(`${API_VERSION}/auth`, authRoutes);
-router.use(`${API_VERSION}/clients`, clientRoutes);
-router.use(`${API_VERSION}/invoices`, invoiceRoutes);
-router.use(`${API_VERSION}/revenues`, revenueRoutes);
-router.use(`${API_VERSION}/targets`, targetRoutes);
-router.use(`${API_VERSION}/forecast`, forecastRoutes);
-router.use(`${API_VERSION}/dashboard`, dashboardRoutes);
+router.use("/auth", authRoutes);
+router.use("/clients", clientRoutes);
+router.use("/invoices", invoiceRoutes);
+router.use("/revenues", revenueRoutes);
+router.use("/targets", targetRoutes);
+router.use("/forecast", forecastRoutes);
+router.use("/dashboard", dashboardRoutes);
 
 /**
  * ==========================================
- * GLOBAL 404 ERROR HANDLER
+ * GLOBAL 404 HANDLER
  * ==========================================
  */
 router.use((req, res) => {
@@ -63,24 +54,6 @@ router.use((req, res) => {
     success: false,
     error: "Route Not Found",
     message: `Cannot ${req.method} ${req.originalUrl}`,
-    timestamp: new Date().toISOString(),
-  });
-});
-
-/**
- * ==========================================
- * GLOBAL 500 ERROR HANDLER
- * Catches all unhandled errors from async controllers
- * ==========================================
- */
-router.use((err, req, res, next) => {
-  console.error("[GlobalErrorHandler] Unhandled error:", err);
-
-  res.status(err.statusCode || 500).json({
-    success: false,
-    error: err.name || "Internal Server Error",
-    message: err.message || "Something went wrong",
-    stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
     timestamp: new Date().toISOString(),
   });
 });

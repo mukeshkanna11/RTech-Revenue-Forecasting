@@ -2,39 +2,68 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const rateLimit = require("express-rate-limit");
+
 const routes = require("./routes");
 const { errorHandler } = require("./middlewares/error.middleware");
 
 const app = express();
 
 /* ========================
-   Allowed Origins (ENV BASED)
+   ENV CONFIG
 ======================== */
 
+const NODE_ENV = process.env.NODE_ENV || "development";
+
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",")
+  ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.replace(/\/$/, ""))
   : [];
 
 /* ========================
-   Global Middlewares
+   TRUST PROXY (IMPORTANT FOR RENDER)
+======================== */
+app.set("trust proxy", 1);
+
+/* ========================
+   SECURITY MIDDLEWARES
 ======================== */
 
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+  })
+);
+
+/* ========================
+   RATE LIMITING (BASIC PROTECTION)
+======================== */
+
+const limiter = rateLimit({
+  windowMs: (process.env.RATE_LIMIT_WINDOW || 15) * 60 * 1000,
+  max: process.env.RATE_LIMIT_MAX || 100,
+  message: {
+    success: false,
+    message: "Too many requests, please try again later"
+  }
+});
+
+app.use("/api", limiter);
+
+/* ========================
+   CORS CONFIG (ROBUST)
+======================== */
 
 app.use(
   cors({
     origin: function (origin, callback) {
       console.log("🌐 Incoming Origin:", origin);
 
-      // allow non-browser clients (Postman, mobile apps)
+      // allow Postman / server requests
       if (!origin) return callback(null, true);
 
-      // normalize origin (remove trailing slash)
       const normalizedOrigin = origin.replace(/\/$/, "");
 
-      const isAllowed = allowedOrigins.some(
-        (o) => o.replace(/\/$/, "") === normalizedOrigin
-      );
+      const isAllowed = allowedOrigins.includes(normalizedOrigin);
 
       if (isAllowed) {
         return callback(null, true);
@@ -49,46 +78,69 @@ app.use(
   })
 );
 
-/* ✅ Handle Preflight Requests */
+/* ✅ Handle Preflight */
 app.options("*", cors());
 
-app.use(express.json());
+/* ========================
+   BODY PARSING
+======================== */
+
+app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true }));
 
-if (process.env.NODE_ENV !== "production") {
+/* ========================
+   LOGGING (DEV ONLY)
+======================== */
+
+if (NODE_ENV !== "production") {
   app.use(morgan("dev"));
 }
 
 /* ========================
-   API Routes
+   REQUEST LOGGER (DEBUG)
+======================== */
+
+if (NODE_ENV !== "production") {
+  app.use((req, res, next) => {
+    console.log(`➡️ ${req.method} ${req.originalUrl}`);
+    next();
+  });
+}
+
+/* ========================
+   API ROUTES
 ======================== */
 
 app.use("/api/v1", routes);
 
 /* ========================
-   Health Check (IMPORTANT)
+   HEALTH CHECK
 ======================== */
 
 app.get("/", (req, res) => {
-  res.json({
+  res.status(200).json({
     success: true,
-    message: "API is running 🚀"
+    message: "API is running 🚀",
+    environment: NODE_ENV,
+    timestamp: new Date().toISOString()
   });
 });
 
 /* ========================
-   404 Handler
+   404 HANDLER
 ======================== */
 
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: `Route not found: ${req.originalUrl}`
+    error: "Route Not Found",
+    message: `Cannot ${req.method} ${req.originalUrl}`,
+    timestamp: new Date().toISOString()
   });
 });
 
 /* ========================
-   Global Error Handler
+   GLOBAL ERROR HANDLER
 ======================== */
 
 app.use(errorHandler);
