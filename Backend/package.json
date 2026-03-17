@@ -25,6 +25,7 @@
     "node-cron": "^4.2.1",
     "nodemailer": "^8.0.2",
     "pdfkit": "^0.17.2",
+    "redis": "^5.11.0",
     "stream-buffers": "^3.0.3",
     "uuid": "^13.0.0",
     "winston": "^3.19.0",

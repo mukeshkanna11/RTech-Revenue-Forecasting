@@ -101,58 +101,74 @@ return(
 <main className="w-full p-8 space-y-8">
 
 
-{/* HERO */}
-
 <motion.div
-initial={{opacity:0,y:20}}
-animate={{opacity:1,y:0}}
-className="p-10 shadow-xl rounded-3xl bg-gradient-to-r from-indigo-600 to-purple-600"
+  initial={{ opacity: 0, y: 20 }}
+  animate={{ opacity: 1, y: 0 }}
+  className="p-10 border border-gray-800 shadow-2xl rounded-3xl from-indigo-600 via-purple-700 to-pink-400 bg-gradient-to-br"
 >
+  <h2 className="text-2xl font-bold tracking-wide text-white">
+    🎯ReadyTechSolutions Dashboard
+  </h2>
 
-<h2 className="text-3xl font-bold">
-ReadyTech Solutions Dashboard
-</h2>
+  <p className="max-w-3xl mt-4 text-sm leading-relaxed text-gray-200">
+    Monitor business performance, track revenue growth, manage clients, and analyze forecasting trends with our intelligent SaaS CRM platform. Access advanced insights, real-time KPIs, and intelligent recommendations designed for modern enterprises.
+  </p>
 
-<p className="max-w-2xl mt-3 text-sm opacity-90">
-
-Monitor business performance, track revenue growth,
-manage clients and analyse forecasting trends with
-our intelligent SaaS CRM platform.
-
-</p>
-
+  <div className="flex flex-wrap gap-4 mt-6">
+    <div className="px-4 py-2 text-sm font-medium text-white transition rounded-lg shadow-md bg-white/10 hover:bg-white/20">
+      📊 Revenue Insights
+    </div>
+    <div className="px-4 py-2 text-sm font-medium text-white transition rounded-lg shadow-md bg-white/10 hover:bg-white/20">
+      🧾 Client Management
+    </div>
+    <div className="px-4 py-2 text-sm font-medium text-white transition rounded-lg shadow-md bg-white/10 hover:bg-white/20">
+      🎯 Target Tracking
+    </div>
+    <div className="px-4 py-2 text-sm font-medium text-white transition rounded-lg shadow-md bg-white/10 hover:bg-white/20">
+      📈 Forecast Analytics
+    </div>
+  </div>
 </motion.div>
 
+{/* stats */}
 
-{/* KPI */}
 
-<div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+<div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
 
-<StatCard
-title="Total Revenue"
-value={formatCurrency(data.totalRevenue)}
-icon={<DollarSign size={20}/>}
-/>
+  <StatCard
+    title="Total Revenue"
+    value={formatCurrency(data.totalRevenue)}
+    icon={<DollarSign size={26} className="text-white" />}
+    className="flex items-center gap-2 p-3 text-white transition-all duration-300 transform border border-gray-700 shadow-2xl bg-gradient-to-r from-indigo-900 via-indigo-700 to-indigo-500 rounded-xl hover:scale-105"
+    compact
+  />
 
-<StatCard
-title="Growth Rate"
-value={`${data.monthlyGrowth || 14}%`}
-icon={<TrendingUp size={20}/>}
-/>
+  <StatCard
+    title="Growth Rate"
+    value={`${data.monthlyGrowth || 14}%`}
+    icon={<TrendingUp size={26} className="text-white" />}
+    className="flex items-center gap-2 p-3 text-white transition-all duration-300 transform border border-gray-700 shadow-2xl bg-gradient-to-r from-green-900 via-green-700 to-green-500 rounded-xl hover:scale-105"
+    compact
+  />
 
-<StatCard
-title="Active Clients"
-value={data.activeClients || 3}
-icon={<Users size={20}/>}
-/>
+  <StatCard
+    title="Active Clients"
+    value={data.activeClients || 3}
+    icon={<Users size={26} className="text-white" />}
+    className="flex items-center gap-2 p-3 text-white transition-all duration-300 transform border border-gray-700 shadow-2xl bg-gradient-to-r from-purple-900 via-purple-700 to-purple-500 rounded-xl hover:scale-105"
+    compact
+  />
 
-<StatCard
-title="Invoices"
-value={data.invoices || 12}
-icon={<FileText size={20}/>}
-/>
+  <StatCard
+    title="Invoices"
+    value={data.invoices || 12}
+    icon={<FileText size={26} className="text-white" />}
+    className="flex items-center gap-2 p-3 text-white transition-all duration-300 transform border border-gray-700 shadow-2xl bg-gradient-to-r from-pink-900 via-pink-700 to-pink-500 rounded-xl hover:scale-105"
+    compact
+  />
 
 </div>
+
 
 
 {/* CHART + AI */}
