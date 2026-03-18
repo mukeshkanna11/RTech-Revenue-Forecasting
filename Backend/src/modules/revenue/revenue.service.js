@@ -1,3 +1,5 @@
+// src/modules/revenue/revenue.service.js
+
 const mongoose = require("mongoose");
 const Revenue = require("./revenue.model");
 const Target = require("../target/target.model");
@@ -5,55 +7,41 @@ const ApiError = require("../../utils/ApiError");
 
 /**
  * =====================================
- * CREATE REVENUE
+ * CREATE REVENUE (Upsert: update existing or create new)
  * =====================================
  */
 const createRevenue = async (payload) => {
+  const { department, month, year, amount } = payload;
 
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-
-    const exists = await Revenue.findOne({
-      month: payload.month,
-      year: payload.year,
-      department: payload.department,
-      isDeleted: false
-    }).session(session);
-
-    if (exists) {
-      throw new ApiError(
-        409,
-        "Revenue already exists for this month, year and department"
-      );
-    }
-
-    const revenue = await Revenue.create([payload], { session });
-
-    await session.commitTransaction();
-    session.endSession();
-
-    return revenue[0];
-
-  } catch (error) {
-
-    await session.abortTransaction();
-    session.endSession();
-    throw error;
-
+  if (!department || !month || !year || !amount) {
+    throw new ApiError(400, "All fields are required: department, month, year, amount");
   }
+
+  // 🔄 Upsert: update existing revenue or create new one
+  const revenue = await Revenue.findOneAndUpdate(
+    { department, month, year, isDeleted: false },
+    { $set: { amount } },
+    { new: true, upsert: true, runValidators: true }
+  ).lean();
+
+  return revenue;
 };
-
-
 
 /**
  * =====================================
- * GET ALL REVENUES (Advanced Filtering)
+ * FIND REVENUE (Helper for duplicate checks)
+ * =====================================
+ */
+const findRevenue = async (filter) => {
+  return Revenue.findOne({ ...filter, isDeleted: false }).lean();
+};
+
+/**
+ * =====================================
+ * GET ALL REVENUES (Advanced Filtering + Pagination)
  * =====================================
  */
 const getAllRevenue = async (query) => {
-
   const page = Math.max(Number(query.page) || 1, 1);
   const limit = Math.min(Number(query.limit) || 10, 100);
   const skip = (page - 1) * limit;
@@ -71,15 +59,12 @@ const getAllRevenue = async (query) => {
   }
 
   const [revenues, total] = await Promise.all([
-
     Revenue.find(filter)
       .sort({ year: -1, month: -1 })
       .skip(skip)
       .limit(limit)
       .lean(),
-
     Revenue.countDocuments(filter)
-
   ]);
 
   return {
@@ -91,10 +76,7 @@ const getAllRevenue = async (query) => {
       pages: Math.ceil(total / limit)
     }
   };
-
 };
-
-
 
 /**
  * =====================================
@@ -102,31 +84,33 @@ const getAllRevenue = async (query) => {
  * =====================================
  */
 const getRevenueById = async (id) => {
-
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ApiError(400, "Invalid Revenue ID");
   }
 
-  const revenue = await Revenue.findOne({
-    _id: id,
-    isDeleted: false
-  }).lean();
-
-  if (!revenue) {
-    throw new ApiError(404, "Revenue not found");
-  }
+  const revenue = await Revenue.findOne({ _id: id, isDeleted: false }).lean();
+  if (!revenue) throw new ApiError(404, "Revenue not found");
 
   return revenue;
 };
 
-
-
 /**
  * =====================================
- * UPDATE REVENUE
+ * UPDATE REVENUE (Prevent duplicates on update)
  * =====================================
  */
 const updateRevenue = async (id, payload) => {
+  const { department, month, year } = payload;
+
+  if (department && month && year) {
+    const duplicate = await findRevenue({ department, month, year });
+    if (duplicate && duplicate._id.toString() !== id) {
+      throw new ApiError(
+        400,
+        `Revenue for department '${department}' in ${month}/${year} already exists`
+      );
+    }
+  }
 
   const revenue = await Revenue.findOneAndUpdate(
     { _id: id, isDeleted: false },
@@ -134,14 +118,9 @@ const updateRevenue = async (id, payload) => {
     { new: true, runValidators: true }
   ).lean();
 
-  if (!revenue) {
-    throw new ApiError(404, "Revenue not found");
-  }
-
+  if (!revenue) throw new ApiError(404, "Revenue not found");
   return revenue;
 };
-
-
 
 /**
  * =====================================
@@ -149,21 +128,15 @@ const updateRevenue = async (id, payload) => {
  * =====================================
  */
 const softDeleteRevenue = async (id) => {
-
   const revenue = await Revenue.findOneAndUpdate(
     { _id: id, isDeleted: false },
-    { isDeleted: true },
+    { isDeleted: true, deletedAt: new Date() },
     { new: true }
   ).lean();
 
-  if (!revenue) {
-    throw new ApiError(404, "Revenue not found");
-  }
-
+  if (!revenue) throw new ApiError(404, "Revenue not found");
   return revenue;
 };
-
-
 
 /**
  * =====================================
@@ -171,21 +144,14 @@ const softDeleteRevenue = async (id) => {
  * =====================================
  */
 const getRevenueTrend = async () => {
-
   return Revenue.aggregate([
-
     { $match: { isDeleted: false } },
-
     {
       $group: {
-        _id: {
-          year: "$year",
-          month: "$month"
-        },
+        _id: { year: "$year", month: "$month" },
         revenue: { $sum: "$amount" }
       }
     },
-
     {
       $project: {
         year: "$_id.year",
@@ -194,16 +160,9 @@ const getRevenueTrend = async () => {
         _id: 0
       }
     },
-
-    {
-      $sort: { year: 1, month: 1 }
-    }
-
+    { $sort: { year: 1, month: 1 } }
   ]);
-
 };
-
-
 
 /**
  * =====================================
@@ -211,11 +170,8 @@ const getRevenueTrend = async () => {
  * =====================================
  */
 const getDepartmentRevenue = async () => {
-
   return Revenue.aggregate([
-
     { $match: { isDeleted: false } },
-
     {
       $group: {
         _id: "$department",
@@ -223,7 +179,6 @@ const getDepartmentRevenue = async () => {
         months: { $addToSet: "$month" }
       }
     },
-
     {
       $project: {
         department: "$_id",
@@ -232,16 +187,9 @@ const getDepartmentRevenue = async () => {
         _id: 0
       }
     },
-
-    {
-      $sort: { totalRevenue: -1 }
-    }
-
+    { $sort: { totalRevenue: -1 } }
   ]);
-
 };
-
-
 
 /**
  * =====================================
@@ -249,46 +197,28 @@ const getDepartmentRevenue = async () => {
  * =====================================
  */
 const getForecast = async (months = 3) => {
-
-  const revenues = await Revenue.find({
-    isDeleted: false
-  })
+  const revenues = await Revenue.find({ isDeleted: false })
     .sort({ year: 1, month: 1 })
     .lean();
 
   const amounts = revenues.map(r => r.amount);
-
   if (amounts.length < 3) {
-    throw new ApiError(
-      400,
-      "Minimum 3 months data required for forecast"
-    );
+    throw new ApiError(400, "Minimum 3 months data required for forecast");
   }
 
   const forecasts = [];
-  let data = [...amounts];
+  const data = [...amounts];
 
   for (let i = 0; i < months; i++) {
-
     const last3 = data.slice(-3);
-
-    const weightedAvg =
-      (last3[0] * 0.2) +
-      (last3[1] * 0.3) +
-      (last3[2] * 0.5);
-
+    const weightedAvg = (last3[0] * 0.2) + (last3[1] * 0.3) + (last3[2] * 0.5);
     const next = Math.round(weightedAvg);
-
     forecasts.push(next);
     data.push(next);
-
   }
 
   return forecasts;
-
 };
-
-
 
 /**
  * =====================================
@@ -296,30 +226,15 @@ const getForecast = async (months = 3) => {
  * =====================================
  */
 const compareTargetVsRevenue = async (month, year) => {
-
   const [revenue, target] = await Promise.all([
-
-    Revenue.findOne({
-      month,
-      year,
-      isDeleted: false
-    }).lean(),
-
-    Target.findOne({
-      month,
-      year,
-      isDeleted: false
-    }).lean()
-
+    Revenue.findOne({ month, year, isDeleted: false }).lean(),
+    Target.findOne({ month, year, isDeleted: false }).lean()
   ]);
 
   const actual = revenue?.amount || 0;
   const targetAmount = target?.targetAmount || 0;
-
   const achievementPercent =
-    targetAmount > 0
-      ? Number(((actual / targetAmount) * 100).toFixed(2))
-      : 0;
+    targetAmount > 0 ? Number(((actual / targetAmount) * 100).toFixed(2)) : 0;
 
   return {
     month,
@@ -329,14 +244,11 @@ const compareTargetVsRevenue = async (month, year) => {
     difference: actual - targetAmount,
     achievementPercent
   };
-
 };
 
-
-
 module.exports = {
-
   createRevenue,
+  findRevenue,
   getAllRevenue,
   getRevenueById,
   updateRevenue,
@@ -345,5 +257,4 @@ module.exports = {
   getDepartmentRevenue,
   getForecast,
   compareTargetVsRevenue
-
 };

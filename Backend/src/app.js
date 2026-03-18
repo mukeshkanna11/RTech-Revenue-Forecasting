@@ -15,71 +15,114 @@ const app = express();
 
 const NODE_ENV = process.env.NODE_ENV || "development";
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.replace(/\/$/, ""))
-  : [];
-
 /* ========================
-   TRUST PROXY (IMPORTANT FOR RENDER)
+   TRUST PROXY (RENDER / NGINX)
 ======================== */
 app.set("trust proxy", 1);
 
 /* ========================
-   SECURITY MIDDLEWARES
+   UTILS
+======================== */
+
+const normalizeOrigin = (origin) => {
+  if (!origin) return origin;
+  return origin.replace(/\/$/, "").toLowerCase();
+};
+
+const parseOrigins = (origins) => {
+  return origins
+    ? origins.split(",").map((o) => normalizeOrigin(o))
+    : [];
+};
+
+const allowedOrigins = parseOrigins(process.env.ALLOWED_ORIGINS);
+
+/* ========================
+   SECURITY (HELMET)
 ======================== */
 
 app.use(
   helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" }
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+    crossOriginEmbedderPolicy: false,
   })
 );
 
 /* ========================
-   RATE LIMITING (BASIC PROTECTION)
+   RATE LIMITING
 ======================== */
 
 const limiter = rateLimit({
-  windowMs: (process.env.RATE_LIMIT_WINDOW || 15) * 60 * 1000,
-  max: process.env.RATE_LIMIT_MAX || 100,
+  windowMs: Number(process.env.RATE_LIMIT_WINDOW || 15) * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_MAX || 100),
+  standardHeaders: true,
+  legacyHeaders: false,
   message: {
     success: false,
-    message: "Too many requests, please try again later"
-  }
+    message: "Too many requests, please try again later",
+  },
 });
 
 app.use("/api", limiter);
 
 /* ========================
-   CORS CONFIG (ROBUST)
+   CORS (SaaS LEVEL)
 ======================== */
 
 app.use(
   cors({
-    origin: function (origin, callback) {
-      console.log("🌐 Incoming Origin:", origin);
+    origin: (origin, callback) => {
+      const normalizedOrigin = normalizeOrigin(origin);
 
-      // allow Postman / server requests
-      if (!origin) return callback(null, true);
+      console.log("🌐 Incoming Origin:", normalizedOrigin);
 
-      const normalizedOrigin = origin.replace(/\/$/, "");
-
-      const isAllowed = allowedOrigins.includes(normalizedOrigin);
-
-      if (isAllowed) {
+      // Allow server-to-server / Postman
+      if (!origin) {
+        console.log("✅ No origin (server request)");
         return callback(null, true);
       }
 
-      console.error("❌ Blocked by CORS:", origin);
-      return callback(new Error("Not allowed by CORS"));
+      // Allow if in whitelist
+      if (allowedOrigins.includes(normalizedOrigin)) {
+        console.log("✅ Allowed Origin:", normalizedOrigin);
+        return callback(null, true);
+      }
+
+      // Allow Netlify previews (optional SaaS feature)
+      if (normalizedOrigin?.includes(".netlify.app")) {
+        console.warn("⚠️ Allowing Netlify preview:", normalizedOrigin);
+        return callback(null, true);
+      }
+
+      console.error("❌ Blocked by CORS:", normalizedOrigin);
+
+      return callback(new Error(`CORS blocked: ${normalizedOrigin}`));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+    ],
+    exposedHeaders: ["Content-Length"],
+    optionsSuccessStatus: 204,
   })
 );
 
 /* ✅ Handle Preflight */
 app.options("*", cors());
+
+/* ========================
+   EXTRA SECURITY HEADERS
+======================== */
+
+app.use((req, res, next) => {
+  res.setHeader("X-App-Name", process.env.APP_NAME || "SaaS API");
+  res.setHeader("X-Environment", NODE_ENV);
+  next();
+});
 
 /* ========================
    BODY PARSING
@@ -89,18 +132,12 @@ app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true }));
 
 /* ========================
-   LOGGING (DEV ONLY)
+   LOGGING
 ======================== */
 
 if (NODE_ENV !== "production") {
   app.use(morgan("dev"));
-}
 
-/* ========================
-   REQUEST LOGGER (DEBUG)
-======================== */
-
-if (NODE_ENV !== "production") {
   app.use((req, res, next) => {
     console.log(`➡️ ${req.method} ${req.originalUrl}`);
     next();
@@ -122,7 +159,7 @@ app.get("/", (req, res) => {
     success: true,
     message: "API is running 🚀",
     environment: NODE_ENV,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -135,7 +172,7 @@ app.use((req, res) => {
     success: false,
     error: "Route Not Found",
     message: `Cannot ${req.method} ${req.originalUrl}`,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
