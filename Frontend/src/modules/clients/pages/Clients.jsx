@@ -1,7 +1,7 @@
 // src/modules/clients/pages/Clients.jsx
 
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Edit, Trash, Search } from "lucide-react";
+import { Plus, Edit, Trash, Users, Search } from "lucide-react";
 
 import API from "../../../utils/axios";
 import Navbar from "../../../components/layout/Navbar";
@@ -219,13 +219,13 @@ setFilteredClients(results.slice(0,5));
 
 if(loading){
 
-return(
+return( 
 
-<div className="flex items-center justify-center min-h-screen text-gray-400 bg-gray-950">
+<div className="flex items-center justify-center h-screen bg-gray-950">
+      <p className="text-lg text-gray-400 animate-pulse">Loading Clients Data...</p>
+    </div>
 
-<div className="w-10 h-10 border-4 border-indigo-500 rounded-full border-t-transparent animate-spin"/>
 
-</div>
 
 )
 
@@ -257,17 +257,50 @@ return(
 <main className="w-full p-8 space-y-8">
 
 
+
+
 {/* PAGE HEADER */}
+<div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
 
-<div>
+  {/* Left Section */}
+  <div className="flex items-start gap-4">
 
-<h1 className="text-3xl font-bold">
-Clients Management
-</h1>
+    {/* Icon Badge */}
+    <div className="flex items-center justify-center w-12 h-12 border shadow-lg rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 border-white/10">
+      <Users className="w-6 h-6 text-white" />
+    </div>
 
-<p className="mt-1 text-sm text-gray-400">
-Create and manage your business clients.
-</p>
+    {/* Title & Description */}
+    <div>
+      <h1 className="text-3xl md:text-4xl font-semibold tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
+        Clients Management
+      </h1>
+      <p className="mt-1 text-sm text-gray-400">
+        Create, manage, and track all your business clients in one place
+      </p>
+    </div>
+
+  </div>
+
+  {/* Right Section */}
+  <div className="flex items-center gap-3">
+
+    {/* Active Status */}
+    <div className="hidden sm:flex items-center gap-2 px-4 py-2 border rounded-xl bg-white/5 border-white/10 backdrop-blur-md">
+      <span className="relative flex w-2 h-2">
+        <span className="absolute inline-flex w-full h-full bg-green-400 rounded-full opacity-75 animate-ping"></span>
+        <span className="relative inline-flex w-2 h-2 bg-green-500 rounded-full"></span>
+      </span>
+      <span className="text-xs text-gray-300">Active Clients</span>
+    </div>
+
+    {/* Add Client Button */}
+    <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all duration-300 border shadow-md rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:scale-105 hover:shadow-lg border-white/10">
+      <Plus className="w-4 h-4" />
+      Add Client
+    </button>
+
+  </div>
 
 </div>
 

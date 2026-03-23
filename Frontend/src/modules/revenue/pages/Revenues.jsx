@@ -154,22 +154,101 @@ export default function Revenues() {
       <Navbar/>
       <div className="w-full px-6 py-10 space-y-8">
 
-        {/* HEADER */}
-        <div>
-          <h1 className="text-3xl font-bold">Revenue Analytics</h1>
-          <p className="text-gray-400">Track financial performance across departments</p>
-        </div>
+       
 
-        {/* ALERTS */}
-        {error.general && <Alert type="error" message={error.general}/>}
-        {success && <Alert type="success" message={success}/>}
+{/* HEADER */}
+<div className="flex flex-col gap-6">
 
-        {/* ANALYTICS CARDS */}
-        <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-4">
-          <StatCard icon={<DollarSign/>} title="Total Revenue" value={formatCurrency(totalRevenue)}/>
-          <StatCard icon={<Building2/>} title="Departments" value={departmentCount}/>
-          <StatCard icon={<TrendingUp/>} title="Records" value={revenues.length}/>
+  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+
+    {/* Left Section */}
+    <div className="flex items-start gap-4">
+      
+      {/* Icon Badge */}
+      <div className="flex items-center justify-center w-12 h-12 border shadow-lg rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 border-white/10">
+        <DollarSign className="w-6 h-6 text-white" />
+      </div>
+
+      {/* Title */}
+      <div>
+        <h1 className="text-3xl md:text-4xl font-semibold tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
+          Revenue Analytics
+        </h1>
+        <p className="mt-1 text-sm text-gray-400">
+          Monitor, analyze, and optimize financial performance across departments
+        </p>
+      </div>
+
+    </div>
+
+    {/* Right Section */}
+    <div className="flex items-center gap-3">
+
+      {/* Live Status */}
+      <div className="hidden sm:flex items-center gap-2 px-4 py-2 border rounded-xl bg-white/5 border-white/10 backdrop-blur-md">
+        <span className="relative flex w-2 h-2">
+          <span className="absolute inline-flex w-full h-full bg-green-400 rounded-full opacity-75 animate-ping"></span>
+          <span className="relative inline-flex w-2 h-2 bg-green-500 rounded-full"></span>
+        </span>
+        <span className="text-xs text-gray-300">Live</span>
+      </div>
+
+      {/* CTA */}
+      <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all duration-300 border shadow-md rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:scale-105 hover:shadow-lg border-white/10">
+        <Plus className="w-4 h-4" />
+        Add Revenue
+      </button>
+
+    </div>
+
+  </div>
+
+  {/* ALERTS */}
+  {error.general && <Alert type="error" message={error.general}/>}
+  {success && <Alert type="success" message={success}/>}
+
+  {/* ANALYTICS CARDS */}
+  <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-4">
+
+    {/* Total Revenue */}
+    <div className="relative p-5 overflow-hidden transition-all duration-300 border group rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] border-white/10 hover:shadow-xl hover:-translate-y-1">
+      <div className="flex items-center justify-between mb-4">
+        <div className="p-2 border rounded-lg bg-indigo-500/10 border-indigo-500/20">
+          <DollarSign className="w-5 h-5 text-indigo-400" />
         </div>
+        <span className="text-xs text-green-400">+12.5%</span>
+      </div>
+      <h3 className="text-sm text-gray-400">Total Revenue</h3>
+      <p className="mt-1 text-2xl font-semibold text-white">{formatCurrency(totalRevenue)}</p>
+    </div>
+
+    {/* Departments */}
+    <div className="relative p-5 overflow-hidden transition-all duration-300 border group rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] border-white/10 hover:shadow-xl hover:-translate-y-1">
+      <div className="flex items-center justify-between mb-4">
+        <div className="p-2 border rounded-lg bg-purple-500/10 border-purple-500/20">
+          <Building2 className="w-5 h-5 text-purple-400" />
+        </div>
+        <span className="text-xs text-gray-400">Active</span>
+      </div>
+      <h3 className="text-sm text-gray-400">Departments</h3>
+      <p className="mt-1 text-2xl font-semibold text-white">{departmentCount}</p>
+    </div>
+
+    {/* Records */}
+    <div className="relative p-5 overflow-hidden transition-all duration-300 border group rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] border-white/10 hover:shadow-xl hover:-translate-y-1">
+      <div className="flex items-center justify-between mb-4">
+        <div className="p-2 border rounded-lg bg-green-500/10 border-green-500/20">
+          <TrendingUp className="w-5 h-5 text-green-400" />
+        </div>
+        <span className="text-xs text-green-400">Growing</span>
+      </div>
+      <h3 className="text-sm text-gray-400">Records</h3>
+      <p className="mt-1 text-2xl font-semibold text-white">{revenues.length}</p>
+    </div>
+
+  </div>
+
+</div>
 
         {/* FORM */}
         <div className="p-6 bg-gray-900 border border-gray-800 rounded-xl">

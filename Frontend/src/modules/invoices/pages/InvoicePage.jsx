@@ -187,131 +187,227 @@ saveAs(blob, `invoice-${invoice.invoiceNumber}.pdf`);
 <div className="min-h-screen p-8 text-gray-200 bg-gray-950">
 
 {/* -------------------------------------------------- */}
+
+
 {/* HEADER */}
-{/* -------------------------------------------------- */}
+<div className="flex flex-col gap-6 mb-10 md:flex-row md:items-center md:justify-between">
 
-<div className="flex items-center justify-between mb-10">
+  {/* Left Section */}
+  <div className="flex items-start gap-4">
 
-<h1 className="flex items-center gap-3 text-3xl font-bold">
-<FileText className="text-indigo-500"/>
-Invoice Management
-</h1>
+    {/* Icon Badge */}
+    <div className="flex items-center justify-center w-12 h-12 border shadow-lg rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 border-white/10">
+      <FileText className="w-6 h-6 text-white" />
+    </div>
 
-<button
-onClick={()=>navigate("/invoices/create")}
-className="flex items-center gap-2 px-6 py-3 font-semibold bg-indigo-600 rounded-lg shadow-lg hover:bg-indigo-700"
->
-<Plus size={18}/>
-Create Invoice
-</button>
+    {/* Title */}
+    <div>
+      <h1 className="text-3xl md:text-4xl font-semibold tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
+        Invoice Management
+      </h1>
+      <p className="mt-1 text-sm text-gray-400">
+        Create, manage, and track all your invoices seamlessly
+      </p>
+    </div>
+
+  </div>
+
+  {/* Right Section */}
+  <div className="flex items-center gap-3">
+
+    {/* Live Indicator */}
+    <div className="hidden sm:flex items-center gap-2 px-4 py-2 border rounded-xl bg-white/5 border-white/10 backdrop-blur-md">
+      <span className="relative flex w-2 h-2">
+        <span className="absolute inline-flex w-full h-full bg-green-400 rounded-full opacity-75 animate-ping"></span>
+        <span className="relative inline-flex w-2 h-2 bg-green-500 rounded-full"></span>
+      </span>
+      <span className="text-xs text-gray-300">Auto Sync</span>
+    </div>
+
+    {/* CTA Button */}
+    <button
+      onClick={() => navigate("/invoices/create")}
+      className="flex items-center gap-2 px-5 py-3 text-sm font-medium transition-all duration-300 border shadow-lg rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:scale-105 hover:shadow-xl border-white/10"
+    >
+      <Plus className="w-4 h-4" />
+      Create Invoice
+    </button>
+
+  </div>
 
 </div>
 
 
-{/* -------------------------------------------------- */}
 {/* STATS */}
 {/* -------------------------------------------------- */}
 
-<div className="grid gap-6 mb-10 md:grid-cols-4">
+<div className="grid gap-6 mb-10 md:grid-cols-2 lg:grid-cols-4">
 
-<Card
-title="Total Invoices"
-value={stats.total}
-icon={<FileText className="text-indigo-400"/>}
-/>
+  {/* Total Invoices */}
+  <div className="relative p-5 transition-all duration-300 border shadow-xl group rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] border-white/10 hover:-translate-y-1 hover:shadow-2xl">
+    
+    <div className="flex items-center justify-between mb-4">
+      <div className="p-2 border rounded-lg bg-indigo-500/10 border-indigo-500/20">
+        <FileText className="w-5 h-5 text-indigo-400" />
+      </div>
+      <span className="text-xs text-green-400">+8%</span>
+    </div>
 
-<Card
-title="Paid"
-value={stats.paid}
-icon={<CheckCircle className="text-green-400"/>}
-/>
+    <p className="text-sm text-gray-400">Total Invoices</p>
+    <h2 className="mt-1 text-2xl font-semibold text-white">{stats.total}</h2>
 
-<Card
-title="Pending"
-value={stats.pending}
-icon={<Clock className="text-yellow-400"/>}
-/>
+  </div>
 
-<Card
-title="Revenue"
-value={`₹${stats.revenue}`}
-icon={<DollarSign className="text-purple-400"/>}
-/>
+  {/* Paid */}
+  <div className="relative p-5 transition-all duration-300 border shadow-xl group rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] border-white/10 hover:-translate-y-1 hover:shadow-2xl">
+    
+    <div className="flex items-center justify-between mb-4">
+      <div className="p-2 border rounded-lg bg-green-500/10 border-green-500/20">
+        <CheckCircle className="w-5 h-5 text-green-400" />
+      </div>
+      <span className="text-xs text-green-400">Completed</span>
+    </div>
+
+    <p className="text-sm text-gray-400">Paid</p>
+    <h2 className="mt-1 text-2xl font-semibold text-white">{stats.paid}</h2>
+
+  </div>
+
+  {/* Pending */}
+  <div className="relative p-5 transition-all duration-300 border shadow-xl group rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] border-white/10 hover:-translate-y-1 hover:shadow-2xl">
+    
+    <div className="flex items-center justify-between mb-4">
+      <div className="p-2 border rounded-lg bg-yellow-500/10 border-yellow-500/20">
+        <Clock className="w-5 h-5 text-yellow-400" />
+      </div>
+      <span className="text-xs text-yellow-400">In Progress</span>
+    </div>
+
+    <p className="text-sm text-gray-400">Pending</p>
+    <h2 className="mt-1 text-2xl font-semibold text-white">{stats.pending}</h2>
+
+  </div>
+
+  {/* Revenue */}
+  <div className="relative p-5 transition-all duration-300 border shadow-xl group rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] border-white/10 hover:-translate-y-1 hover:shadow-2xl">
+    
+    <div className="flex items-center justify-between mb-4">
+      <div className="p-2 border rounded-lg bg-purple-500/10 border-purple-500/20">
+        <DollarSign className="w-5 h-5 text-purple-400" />
+      </div>
+      <span className="text-xs text-green-400">+12.5%</span>
+    </div>
+
+    <p className="text-sm text-gray-400">Revenue</p>
+    <h2 className="mt-1 text-2xl font-semibold text-white">
+      ₹{stats.revenue}
+    </h2>
+
+  </div>
 
 </div>
 
+
+{/* -------------------------------------------------- */}
 
 {/* -------------------------------------------------- */}
 {/* LATEST INVOICES */}
 {/* -------------------------------------------------- */}
 
-<div className="mb-10">
+<div className="mb-12">
 
-<h2 className="mb-4 text-xl font-semibold">
-Latest Invoices
-</h2>
+  {/* Section Header */}
+  <div className="flex items-center justify-between mb-6">
+    <h2 className="text-xl font-semibold tracking-tight text-white">
+      Latest Invoices
+    </h2>
 
-<div className="grid gap-6 md:grid-cols-3">
+    <span className="text-xs text-gray-400">
+      Recently created invoices
+    </span>
+  </div>
 
-{latest.map(inv => (
+  {/* Grid */}
+  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
 
-<div
-key={inv._id}
-className="p-6 transition bg-gray-900 border border-gray-800 rounded-xl hover:border-indigo-500"
->
+    {latest.map((inv) => {
 
-<div className="flex justify-between mb-2">
+      const statusStyles = {
+        paid: "bg-green-500/10 text-green-400 border-green-500/20",
+        draft: "bg-gray-500/10 text-gray-400 border-gray-500/20",
+        sent: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+        overdue: "bg-red-500/10 text-red-400 border-red-500/20",
+      };
 
-<h3 className="font-semibold">
-{inv.invoiceNumber}
-</h3>
+      return (
+        <div
+          key={inv._id}
+          className="relative p-5 transition-all duration-300 border shadow-xl group rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] border-white/10 hover:-translate-y-1 hover:shadow-2xl"
+        >
 
-<span className={`text-xs px-2 py-1 rounded-full
+          {/* Top Row */}
+          <div className="flex items-start justify-between mb-4">
 
-${inv.status==="paid" && "bg-green-600"}
-${inv.status==="draft" && "bg-gray-600"}
-${inv.status==="sent" && "bg-blue-600"}
-${inv.status==="overdue" && "bg-red-600"}
+            {/* Left */}
+            <div className="flex items-center gap-3">
 
-`}>
+              {/* Icon */}
+              <div className="flex items-center justify-center w-10 h-10 border rounded-xl bg-indigo-500/10 border-indigo-500/20">
+                <FileText className="w-5 h-5 text-indigo-400" />
+              </div>
 
-{inv.status}
+              <div>
+                <h3 className="font-semibold text-white">
+                  {inv.invoiceNumber}
+                </h3>
+                <p className="text-xs text-gray-400">
+                  {inv.client?.companyName || "Client"}
+                </p>
+              </div>
 
-</span>
+            </div>
 
-</div>
+            {/* Status */}
+            <span className={`text-xs px-3 py-1 rounded-full border ${statusStyles[inv.status]}`}>
+              {inv.status}
+            </span>
 
-<p className="mb-2 text-sm text-gray-400">
-{inv.client?.companyName || "Client"}
-</p>
+          </div>
 
-<p className="mb-4 font-semibold text-green-400">
-₹{inv.grandTotal}
-</p>
+          {/* Amount */}
+          <div className="mb-5">
+            <p className="text-lg font-semibold text-green-400">
+              ₹{inv.grandTotal}
+            </p>
+          </div>
 
-<div className="flex gap-3">
+          {/* Footer Actions */}
+          <div className="flex items-center justify-between pt-3 border-t border-white/5">
 
-<button
-onClick={()=>downloadPDF(inv)}
-className="text-yellow-400 hover:text-yellow-300"
->
-<Download size={18}/>
-</button>
+            {/* Small label */}
+            <span className="text-xs text-gray-500">
+              Invoice
+            </span>
 
-{/* <button
-onClick={()=>sendEmail(inv._id)}
-className="text-green-400 hover:text-green-300"
->
-<Send size={18}/>
-</button> */}
+            {/* Actions */}
+            <div className="flex items-center gap-3">
 
-</div>
+              <button
+                onClick={() => downloadPDF(inv)}
+                className="p-2 transition rounded-lg hover:bg-white/10"
+              >
+                <Download size={16} className="text-yellow-400 hover:text-yellow-300" />
+              </button>
 
-</div>
+            </div>
 
-))}
+          </div>
 
-</div>
+        </div>
+      );
+    })}
+
+  </div>
 
 </div>
 
