@@ -41,7 +41,7 @@ const [revenues,setRevenues] = useState([]);
 
 const [loading,setLoading] = useState(false);
 const [error,setError] = useState("");
-
+const [saving, setSaving] = useState(false);
 const [search,setSearch] = useState("");
 
 const [form,setForm] = useState({
@@ -302,16 +302,55 @@ const handleEditClick = (target) => {
 };
 
 
-/* ---------------- SAVE EDIT ---------------- */
+/* ---------------- SAVE EDIT (PARTIAL UPDATE - SAAS) ---------------- */
 const handleSaveEdit = async (id) => {
+  if (!id) return;
+
   try {
-    await API.put(`/targets/${id}`, editForm);
-    setEditingTargetId(null); // exit edit mode
-    fetchData(); // refresh the list
+    setSaving(true);
+
+    // ✅ Build payload dynamically (only changed fields)
+    const payload = {};
+
+    if (editForm.department)
+      payload.department = editForm.department.trim();
+
+    if (editForm.month)
+      payload.month = Number(editForm.month);
+
+    if (editForm.year)
+      payload.year = Number(editForm.year);
+
+    if (editForm.target)
+      payload.target = Number(editForm.target);
+
+    // ❌ If nothing changed
+    if (Object.keys(payload).length === 0) {
+      throw new Error("No changes to update");
+    }
+
+    console.log("🚀 Partial Payload:", payload);
+
+    await API.put(`/targets/${id}`, payload);
+
+    console.log("✅ Updated successfully");
+
+    setEditingTargetId(null);
+    fetchData();
+
   } catch (err) {
-    console.error("Failed to update target", err);
+    const message =
+      err.response?.data?.message ||
+      err.message ||
+      "Update failed";
+
+    console.error("❌ Update Failed:", message);
+
+  } finally {
+    setSaving(false);
   }
 };
+
 
 /* ---------------- DELETE ---------------- */
 

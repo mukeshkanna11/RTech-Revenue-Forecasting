@@ -42,19 +42,50 @@ const getTargetById = asyncHandler(async (req, res) => {
 });
 
 /**
- * UPDATE TARGET
+ * =====================================
+ * UPDATE TARGET (CONTROLLER - SAAS)
+ * =====================================
  */
 const updateTarget = asyncHandler(async (req, res) => {
 
-  const updated = await targetService.updateTarget(
-    req.params.id,
-    req.body
-  );
+  const { id } = req.params;
 
-  res.status(200).json({
+  // ✅ 1. Basic request validation
+  if (!id) {
+    return res.status(400).json({
+      success: false,
+      message: "Target ID is required",
+    });
+  }
+
+  // ✅ 2. Ensure payload exists
+  if (!req.body || Object.keys(req.body).length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "No data provided for update",
+    });
+  }
+
+  // ✅ 3. (Optional SaaS) Attach audit info
+  const payload = {
+    ...req.body,
+    // updatedBy: req.user?.id,   // if auth exists
+    updatedAt: new Date(),
+  };
+
+  console.log("📝 Update Target Request:", {
+    id,
+    payload,
+  });
+
+  // ✅ 4. Service call
+  const updated = await targetService.updateTarget(id, payload);
+
+  // ✅ 5. Standardized response
+  return res.status(200).json({
     success: true,
     message: "Target updated successfully",
-    data: updated
+    data: updated,
   });
 });
 

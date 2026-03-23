@@ -116,27 +116,80 @@ const getTargetById = async (id) => {
 
 /**
  * =====================================
- * UPDATE TARGET
+ * UPDATE TARGET (SAAS LEVEL)
  * =====================================
  */
 const updateTarget = async (id, payload) => {
 
+  // ✅ 1. Validate ID
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ApiError(400, "Invalid target id");
   }
 
-  const updated = await Target.findOneAndUpdate(
-    { _id: id, isDeleted: false },
-    payload,
-    {
-      new: true,
-      runValidators: true
-    }
-  ).lean();
+  // ✅ 2. Get existing record
+  const existing = await Target.findOne({
+    _id: id,
+    isDeleted: false,
+  });
 
-  if (!updated) {
+  if (!existing) {
     throw new ApiError(404, "Target not found");
   }
+
+  // ✅ 3. Clean payload (remove undefined/null/empty)
+  const cleanPayload = {};
+  Object.keys(payload).forEach((key) => {
+    const value = payload[key];
+
+    if (value !== undefined && value !== null && value !== "") {
+      cleanPayload[key] = value;
+    }
+  });
+
+  // ❌ No changes
+  if (Object.keys(cleanPayload).length === 0) {
+    throw new ApiError(400, "No valid fields provided for update");
+  }
+
+  // ✅ 4. Merge existing + new (FIXES YOUR ERROR 🔥)
+  const updatedData = {
+    department: cleanPayload.department ?? existing.department,
+    month: cleanPayload.month ?? existing.month,
+    year: cleanPayload.year ?? existing.year,
+    target: cleanPayload.target ?? existing.target,
+  };
+
+  // ✅ 5. (Optional SaaS) Prevent duplicate entries
+  if (
+    cleanPayload.department ||
+    cleanPayload.month ||
+    cleanPayload.year
+  ) {
+    const duplicate = await Target.findOne({
+      _id: { $ne: id },
+      department: updatedData.department,
+      month: updatedData.month,
+      year: updatedData.year,
+      isDeleted: false,
+    });
+
+    if (duplicate) {
+      throw new ApiError(
+        409,
+        "Target already exists for this department, month, and year"
+      );
+    }
+  }
+
+  // ✅ 6. Update with validation
+  const updated = await Target.findOneAndUpdate(
+    { _id: id, isDeleted: false },
+    updatedData,
+    {
+      new: true,
+      runValidators: true,
+    }
+  ).lean();
 
   return updated;
 };
