@@ -17,6 +17,7 @@
     "framer-motion": "^12.36.0",
     "jspdf": "^4.2.0",
     "lucide-react": "^0.576.0",
+    "number-to-words": "^1.2.4",
     "react": "^19.2.0",
     "react-countup": "^6.5.3",
     "react-dom": "^19.2.0",

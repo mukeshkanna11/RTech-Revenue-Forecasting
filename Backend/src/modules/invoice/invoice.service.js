@@ -1,388 +1,176 @@
-const mongoose = require("mongoose");
 const Invoice = require("./invoice.model");
-const generateInvoicePDF = require("./invoice.pdf");
-const sendInvoiceEmail = require("./invoice.email");
+const Counter = require("./counter.model");
+const { toWords } = require("number-to-words");
 
-/* ===================================================
-   SAFE INVOICE NUMBER GENERATOR (NO DUPLICATES)
-=================================================== */
+class InvoiceService {
+  /**
+   * Generate a unique invoice number (safe for SaaS multi-user)
+   */
+  static async generateInvoiceNumber() {
+    try {
+      let counter, invoiceNumberExists;
+      const year = new Date().getFullYear();
 
-const Counter = require("./counter.model");   // ✅ correct
+      do {
+        counter = await Counter.findByIdAndUpdate(
+          { _id: "invoiceNumber" },
+          { $inc: { seq: 1 } },
+          { new: true, upsert: true }
+        );
 
-const generateInvoiceNumber = async () => {
+        invoiceNumberExists = await Invoice.exists({ invoiceNumber: `INV-${year}-${String(counter.seq).padStart(4, "0")}` });
+      } while (invoiceNumberExists);
 
-  const year = new Date().getFullYear();
+      return `INV-${year}-${String(counter.seq).padStart(4, "0")}`;
+    } catch (err) {
+      throw new Error("Failed to generate invoice number: " + err.message);
+    }
+  }
 
-  const counter = await Counter.findOneAndUpdate(
-    { name: `invoice-${year}` },
-    { $inc: { seq: 1 } },
-    { new: true, upsert: true }
-  );
-
-  const number = String(counter.seq).padStart(4, "0");
-
-  return `INV-${year}-${number}`;
-};
-
-/* ===================================================
-   CALCULATE TOTALS
-=================================================== */
-
-const calculateTotals = (items = [], discount = 0) => {
-
-  let subTotal = 0;
-  let totalTaxAmount = 0;
-
-  const updatedItems = items.map((item) => {
-
-    const quantity = Number(item.quantity) || 0;
-    const price = Number(item.price) || 0;
-    const itemDiscount = Number(item.discount) || 0;
-    const taxPercent = Number(item.taxPercent) || 0;
-
-    const base = quantity * price - itemDiscount;
-
-    const taxAmount = (base * taxPercent) / 100;
-
-    const total = base + taxAmount;
-
-    subTotal += base;
-    totalTaxAmount += taxAmount;
-
-    return {
-      ...item,
-      taxAmount,
-      total
-    };
-
-  });
-
-  const grandTotal = subTotal - discount + totalTaxAmount;
-
-  return {
-    items: updatedItems,
-    subTotal,
-    totalTaxAmount,
-    grandTotal
-  };
-};
-
-/* ===================================================
-   CREATE INVOICE
-=================================================== */
-
-const createInvoice = async (payload) => {
-
-  const session = await mongoose.startSession();
-
-  try {
-
-    session.startTransaction();
-
-    /* ---------- VALIDATION ---------- */
-
-    if (!payload.client) {
-      throw new Error("Client is required");
+  /**
+   * Create a new invoice
+   * @param {Object} data - Full invoice data
+   */
+  static async createInvoice(data) {
+    if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
+      throw new Error("Invoice must contain at least one item");
     }
 
-    if (!payload.items || payload.items.length === 0) {
-      throw new Error("Invoice must contain items");
+    // Generate invoice number if not provided
+    if (!data.invoiceNumber) {
+      data.invoiceNumber = await this.generateInvoiceNumber();
     }
 
-    /* ---------- GENERATE INVOICE NUMBER ---------- */
+    // Calculate totals for each item
+    data.items = data.items.map((item) => {
+      const quantity = item.quantity || 1;
+      const rate = item.rate || 0;
+      const taxPercent = item.taxPercent || 0;
 
-    const invoiceNumber = await generateInvoiceNumber(); // atomic counter
+      const base = quantity * rate;
+      const taxAmount = (base * taxPercent) / 100;
+      const total = base + taxAmount;
 
-    /* ---------- CALCULATE TOTALS ---------- */
-
-    const totals = calculateTotals(
-      payload.items,
-      payload.discount || 0
-    );
-
-    /* ---------- CREATE INVOICE ---------- */
-
-    const invoice = new Invoice({
-      ...payload,
-      invoiceNumber,
-      items: totals.items,
-      subTotal: totals.subTotal,
-      totalTaxAmount: totals.totalTaxAmount,
-      grandTotal: totals.grandTotal
+      return { ...item, taxAmount, total };
     });
 
-    await invoice.save({ session });
+    // Calculate invoice totals
+    const subTotal = data.items.reduce((sum, item) => sum + item.quantity * item.rate, 0);
+    const totalTaxAmount = data.items.reduce((sum, item) => sum + item.taxAmount, 0);
+    const grandTotal = subTotal + totalTaxAmount;
 
-    /* ---------- COMMIT ---------- */
+    data.subTotal = subTotal;
+    data.totalTaxAmount = totalTaxAmount;
+    data.grandTotal = grandTotal;
+    data.amountInWords = toWords(grandTotal);
 
-    await session.commitTransaction();
+    // Default status
+    data.status = data.status || "draft";
 
+    const invoice = await Invoice.create(data);
     return invoice;
-
-  } catch (err) {
-
-    await session.abortTransaction();
-
-    if (err.code === 11000) {
-      throw new Error("Duplicate invoice number detected");
-    }
-
-    throw err;
-
-  } finally {
-
-    session.endSession();
-
   }
 
-};
+  /**
+   * Get invoices with pagination, filter, and sorting
+   */
+  static async getInvoices(filter = {}, page = 1, limit = 10, sortBy = "-invoiceDate") {
+    const skip = (page - 1) * limit;
+    const total = await Invoice.countDocuments(filter);
 
-/* ===================================================
-   GET INVOICES (Pagination + Search)
-=================================================== */
-
-const getInvoices = async ({
-  page = 1,
-  limit = 10,
-  search = "",
-  status
-}) => {
-
-  const query = { isDeleted: false };
-
-  if (status) query.status = status;
-
-  if (search) {
-
-    query.$or = [
-      { invoiceNumber: { $regex: search, $options: "i" } },
-      { notes: { $regex: search, $options: "i" } }
-    ];
-
-  }
-
-  const skip = (page - 1) * limit;
-
-  const [data, total] = await Promise.all([
-
-    Invoice.find(query)
-      .populate("client", "name companyName email")
-      .sort({ createdAt: -1 })
+    const invoices = await Invoice.find(filter)
       .skip(skip)
       .limit(limit)
-      .lean(),
+      .sort(sortBy);
 
-    Invoice.countDocuments(query)
-
-  ]);
-
-  return {
-    data,
-    total,
-    page,
-    pages: Math.ceil(total / limit)
-  };
-
-};
-
-/* ===================================================
-   GET SINGLE INVOICE
-=================================================== */
-
-const getInvoiceById = async (id) => {
-
-  if (!mongoose.Types.ObjectId.isValid(id))
-    throw new Error("Invalid invoice id");
-
-  const invoice = await Invoice.findOne({
-    _id: id,
-    isDeleted: false
-  })
-    .populate("client")
-    .lean();
-
-  return invoice;
-};
-
-/* ===================================================
-   UPDATE INVOICE
-=================================================== */
-
-const updateInvoice = async (id, payload) => {
-
-  if (!mongoose.Types.ObjectId.isValid(id))
-    throw new Error("Invalid invoice id");
-
-  if (payload.items) {
-
-    const totals = calculateTotals(payload.items, payload.discount);
-
-    payload.items = totals.items;
-    payload.subTotal = totals.subTotal;
-    payload.totalTaxAmount = totals.totalTaxAmount;
-    payload.grandTotal = totals.grandTotal;
-
+    return {
+      invoices,
+      total,
+      page,
+      pages: Math.ceil(total / limit)
+    };
   }
 
-  return Invoice.findOneAndUpdate(
-    { _id: id, isDeleted: false },
-    payload,
-    { new: true }
-  ).lean();
+  /**
+   * Get a single invoice by ID
+   */
+  static async getInvoiceById(id) {
+    const invoice = await Invoice.findById(id);
+    if (!invoice) throw new Error("Invoice not found");
+    return invoice;
+  }
 
-};
+  /**
+   * Update an invoice
+   */
+  static async updateInvoice(id, data) {
+    const invoice = await Invoice.findById(id);
+    if (!invoice) throw new Error("Invoice not found");
 
-/* ===================================================
-   UPDATE STATUS
-=================================================== */
+    // Recalculate items if provided
+    if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+      data.items = data.items.map((item) => {
+        const quantity = item.quantity || 1;
+        const rate = item.rate || 0;
+        const taxPercent = item.taxPercent || 0;
 
-const updateInvoiceStatus = async (id, status) => {
+        const base = quantity * rate;
+        const taxAmount = (base * taxPercent) / 100;
+        const total = base + taxAmount;
 
-  if (!mongoose.Types.ObjectId.isValid(id))
-    throw new Error("Invalid invoice id");
+        return { ...item, taxAmount, total };
+      });
 
-  return Invoice.findOneAndUpdate(
-    { _id: id, isDeleted: false },
-    { status },
-    { new: true }
-  ).lean();
+      // Update totals
+      const subTotal = data.items.reduce((sum, item) => sum + item.quantity * item.rate, 0);
+      const totalTaxAmount = data.items.reduce((sum, item) => sum + item.taxAmount, 0);
+      const grandTotal = subTotal + totalTaxAmount;
 
-};
-
-/* ===================================================
-   SOFT DELETE
-=================================================== */
-
-const deleteInvoice = async (id) => {
-
-  if (!mongoose.Types.ObjectId.isValid(id))
-    throw new Error("Invalid invoice id");
-
-  return Invoice.findOneAndUpdate(
-    { _id: id, isDeleted: false },
-    { isDeleted: true },
-    { new: true }
-  );
-
-};
-
-/* ===================================================
-   DOWNLOAD PDF
-=================================================== */
-
-const downloadInvoicePDF = async (id) => {
-
-  const invoice = await getInvoiceById(id);
-
-  if (!invoice)
-    throw new Error("Invoice not found");
-
-  const pdf = await generateInvoicePDF(invoice);
-
-  return { invoice, pdf };
-
-};
-
-/* ===================================================
-   EMAIL INVOICE
-=================================================== */
-
-const emailInvoice = async (id) => {
-
-  const invoice = await getInvoiceById(id);
-
-  if (!invoice)
-    throw new Error("Invoice not found");
-
-  const pdf = await generateInvoicePDF(invoice);
-
-  await sendInvoiceEmail(invoice, pdf);
-
-  return invoice;
-
-};
-
-/* ===================================================
-   INVOICE STATS
-=================================================== */
-
-const getInvoiceStats = async () => {
-
-  return Invoice.aggregate([
-
-    { $match: { isDeleted: false } },
-
-    {
-      $group: {
-        _id: "$status",
-        totalAmount: { $sum: "$grandTotal" },
-        count: { $sum: 1 }
-      }
-    },
-
-    {
-      $project: {
-        status: "$_id",
-        totalAmount: 1,
-        count: 1,
-        _id: 0
-      }
+      data.subTotal = subTotal;
+      data.totalTaxAmount = totalTaxAmount;
+      data.grandTotal = grandTotal;
+      data.amountInWords = toWords(grandTotal);
     }
 
-  ]);
+    Object.assign(invoice, data);
+    return await invoice.save();
+  }
 
-};
+  /**
+   * Soft delete an invoice
+   */
+  static async deleteInvoice(id) {
+    const invoice = await Invoice.findByIdAndUpdate(id, { isDeleted: true }, { new: true });
+    if (!invoice) throw new Error("Invoice not found");
+    return invoice;
+  }
 
-/* ===================================================
-   REVENUE ANALYTICS
-=================================================== */
+  /**
+   * Search invoices by keyword
+   */
+  static async searchInvoices(keyword, page = 1, limit = 10) {
+    const regex = new RegExp(keyword, "i");
+    const filter = {
+      $or: [
+        { "customer.name": regex },
+        { invoiceNumber: regex },
+        { remarks: regex }
+      ]
+    };
+    return this.getInvoices(filter, page, limit);
+  }
 
-const getRevenueAnalytics = async () => {
+  /**
+   * Update invoice status
+   */
+  static async updateStatus(id, status) {
+    const validStatuses = ["draft", "sent", "paid", "partial", "overdue"];
+    if (!validStatuses.includes(status)) throw new Error("Invalid status");
 
-  return Invoice.aggregate([
+    const invoice = await Invoice.findByIdAndUpdate(id, { status }, { new: true });
+    if (!invoice) throw new Error("Invoice not found");
+    return invoice;
+  }
+}
 
-    { $match: { isDeleted: false } },
-
-    {
-      $group: {
-        _id: {
-          month: { $month: "$createdAt" },
-          year: { $year: "$createdAt" }
-        },
-        revenue: { $sum: "$grandTotal" },
-        invoices: { $sum: 1 }
-      }
-    },
-
-    {
-      $project: {
-        year: "$_id.year",
-        month: "$_id.month",
-        revenue: 1,
-        invoices: 1,
-        _id: 0
-      }
-    },
-
-    { $sort: { year: 1, month: 1 } }
-
-  ]);
-
-};
-
-/* ===================================================
-   EXPORTS
-=================================================== */
-
-module.exports = {
-  createInvoice,
-  getInvoices,
-  getInvoiceById,
-  updateInvoice,
-  updateInvoiceStatus,
-  deleteInvoice,
-  downloadInvoicePDF,
-  emailInvoice,
-  getInvoiceStats,
-  getRevenueAnalytics
-};
+module.exports = InvoiceService;
