@@ -1,8 +1,15 @@
 const mongoose = require("mongoose");
 
 const counterSchema = new mongoose.Schema({
-  _id: { type: String, required: true }, // e.g., 'invoiceNumber'
-  seq: { type: Number, default: 0 },
+  key: {
+    type: String,
+    required: true,
+    unique: true   // ✅ IMPORTANT
+  },
+  value: {
+    type: Number,
+    default: 0
+  }
 });
 
 module.exports = mongoose.model("Counter", counterSchema);

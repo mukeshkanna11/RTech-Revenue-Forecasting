@@ -1,119 +1,133 @@
-const PDFDocument = require("pdfkit");
-const fs = require("fs");
-const path = require("path");
+const React = require("react");
+const {
+  Document,
+  Page,
+  Text,
+  View,
+  StyleSheet
+} = require("@react-pdf/renderer");
 
-/**
- * Generate TAX Invoice PDF
- * @param {Object} invoice - Invoice document from MongoDB
- * @param {Object} options
- * @param {String} options.filePath - Optional: path to save PDF
- * @param {String} options.logoPath - Optional: path to supplier logo
- * @returns {Promise<Buffer>} PDF buffer
- */
-const generateInvoicePDF = async (invoice, options = {}) => {
-  return new Promise((resolve, reject) => {
-    try {
-      const { filePath, logoPath } = options;
-      const doc = new PDFDocument({ size: "A4", margin: 50 });
+/* =========================================
+   STYLES
+========================================= */
+const styles = StyleSheet.create({
+  page: {
+    padding: 30,
+    fontSize: 10
+  },
+  title: {
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 10
+  },
+  section: {
+    marginBottom: 8
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  tableHeader: {
+    flexDirection: "row",
+    borderBottom: "1px solid black",
+    marginTop: 10,
+    paddingBottom: 4
+  },
+  tableRow: {
+    flexDirection: "row",
+    marginTop: 4
+  },
+  col: {
+    flex: 1
+  }
+});
 
-      let buffers = [];
-      doc.on("data", buffers.push.bind(buffers));
-      doc.on("end", () => {
-        const pdfData = Buffer.concat(buffers);
-        if (filePath) fs.writeFileSync(filePath, pdfData);
-        resolve(pdfData);
-      });
+/* =========================================
+   COMPONENT
+========================================= */
+const InvoicePDF = ({ data }) => {
+  if (!data) return null;
 
-      // Optional logo
-      if (logoPath && fs.existsSync(logoPath)) {
-        doc.image(logoPath, 50, 45, { width: 100 });
-      }
+  const s = data.supplier || {};
+  const r = data.remittance || {};
 
-      // Header
-      doc.fontSize(20).text("TAX INVOICE", { align: "center", underline: true }).moveDown(1);
+  return React.createElement(
+    Document,
+    null,
+    React.createElement(
+      Page,
+      { size: "A4", style: styles.page },
 
-      // Supplier Info
-      doc.fontSize(10)
-        .text(`Supplier: ${invoice.supplier.name || "-"}`)
-        .text(`GSTIN: ${invoice.supplier.gstin || "-"}`, { continued: true })
-        .text(`   CIN: ${invoice.supplier.cin || "-"}`)
-        .text(`IEC: ${invoice.supplier.iec || "-"}   IEC Date: ${invoice.supplier.iecDate ? invoice.supplier.iecDate.toLocaleDateString() : "-"}`)
-        .text(`PAN: ${invoice.supplier.pan || "-"}`)
-        .text(`Tel: ${invoice.supplier.tel || "-"}   Email: ${invoice.supplier.email || "-"}`)
-        .moveDown(1);
+      /* TITLE */
+      React.createElement(Text, { style: styles.title }, "TAX INVOICE"),
 
-      // Invoice Info
-      doc.text(`Invoice No: ${invoice.invoiceNumber || "-"}`)
-        .text(`Invoice Date: ${invoice.invoiceDate ? invoice.invoiceDate.toLocaleDateString() : "-"}`)
-        .text(`Agreement/PO No: ${invoice.agreementPO?.number || "-"}`)
-        .text(`Agreement PO Date: ${invoice.agreementPO?.date ? invoice.agreementPO.date.toLocaleDateString() : "-"}`)
-        .moveDown(1);
+      /* INVOICE DETAILS */
+      React.createElement(View, { style: styles.section },
+        React.createElement(Text, null, `Invoice No: ${data.invoiceNumber}`),
+        React.createElement(Text, null, `Invoice Date: ${new Date(data.invoiceDate).toLocaleDateString()}`),
+        React.createElement(Text, null, `PO No: ${data.agreementPO?.number || "-"}`),
+        React.createElement(Text, null, `PO Date: ${data.agreementPO?.date ? new Date(data.agreementPO.date).toLocaleDateString() : "-"}`),
+        React.createElement(Text, null, `Service Mode: ${data.serviceMode}`)
+      ),
 
-      // Customer Info
-      doc.text(`Customer: ${invoice.customer.name || "-"}`)
-        .text(`Address: ${invoice.customer.address || "-"}`)
-        .text(`Service Mode: ${invoice.customer.serviceMode || "Online / ITES"}`)
-        .moveDown(1);
+      /* SUPPLIER */
+      React.createElement(View, { style: styles.section },
+        React.createElement(Text, null, `Supplier: ${s.name}`),
+        React.createElement(Text, null, `GSTIN: ${s.gstin}`),
+        React.createElement(Text, null, `CIN: ${s.cin}`),
+        React.createElement(Text, null, `PAN: ${s.pan}`),
+        React.createElement(Text, null, `IEC: ${s.iec}`),
+        React.createElement(Text, null, `Email: ${s.email}`),
+        React.createElement(Text, null, `Phone: ${s.phone}`)
+      ),
 
-      // Items Table Header
-      const tableHeaders = ["S No", "Description", "HSN", "Qty", "Rate", "Tax%", "Tax Amount", "Total"];
-      const columnWidths = [40, 150, 50, 40, 60, 40, 70, 70];
+      /* CUSTOMER */
+      React.createElement(View, { style: styles.section },
+        React.createElement(Text, null, `Customer: ${data.clientId?.name || "-"}`),
+        React.createElement(Text, null, `Address: ${data.clientId?.address || "-"}`)
+      ),
 
-      let startX = doc.x;
-      tableHeaders.forEach((header, i) => {
-        doc.text(header, startX, doc.y, { width: columnWidths[i], continued: i !== tableHeaders.length - 1 });
-      });
-      doc.moveDown(0.5);
-      doc.moveTo(startX, doc.y).lineTo(550, doc.y).stroke(); // underline
+      /* TABLE HEADER */
+      React.createElement(View, { style: styles.tableHeader },
+        ["S.No", "Description", "HSN", "Value", "IGST%", "Tax", "Total"].map((h, i) =>
+          React.createElement(Text, { key: i, style: styles.col }, h)
+        )
+      ),
 
-      // Table Rows
-      invoice.items.forEach((item, idx) => {
-        let values = [
-          idx + 1,
-          item.description || "-",
-          item.hsnCode || "-",
-          item.quantity || 0,
-          item.rate?.toFixed(2) || "0.00",
-          item.taxPercent?.toFixed(2) || "0.00",
-          item.taxAmount?.toFixed(2) || "0.00",
-          item.total?.toFixed(2) || "0.00"
-        ];
-        values.forEach((val, i) => {
-          doc.text(val.toString(), startX, doc.y, { width: columnWidths[i], continued: i !== values.length - 1 });
-        });
-        doc.moveDown(0.5);
-      });
+      /* TABLE ROWS */
+      (data.items || []).map((item, i) =>
+        React.createElement(View, { style: styles.tableRow, key: i },
+          React.createElement(Text, { style: styles.col }, i + 1),
+          React.createElement(Text, { style: styles.col }, item.description),
+          React.createElement(Text, { style: styles.col }, item.hsn),
+          React.createElement(Text, { style: styles.col }, item.value),
+          React.createElement(Text, { style: styles.col }, `${item.igstRate}%`),
+          React.createElement(Text, { style: styles.col }, item.igstAmount),
+          React.createElement(Text, { style: styles.col }, item.total)
+        )
+      ),
 
-      doc.moveDown(1);
+      /* TOTAL */
+      React.createElement(View, { style: styles.section },
+        React.createElement(Text, null, `Grand Total: ₹ ${data.totalAmount}`)
+      ),
 
-      // Totals
-      doc.text(`Subtotal: ₹ ${invoice.subTotal?.toFixed(2) || "0.00"}`, { align: "right" })
-        .text(`Total Tax: ₹ ${invoice.totalTaxAmount?.toFixed(2) || "0.00"}`, { align: "right" })
-        .text(`Grand Total: ₹ ${invoice.grandTotal?.toFixed(2) || "0.00"}`, { align: "right" })
-        .text(`In Words: ${invoice.amountInWords || "-"}`, { align: "right" })
-        .moveDown(1);
+      /* REMITTANCE */
+      React.createElement(View, { style: styles.section },
+        React.createElement(Text, null, "Remittance Instructions"),
+        React.createElement(Text, null, `Beneficiary: ${r.beneficiaryName}`),
+        React.createElement(Text, null, `Account: ${r.accountNumber}`),
+        React.createElement(Text, null, `SWIFT: ${r.swiftCode}`),
+        React.createElement(Text, null, `IFSC: ${r.ifscCode}`),
+        React.createElement(Text, null, `Bank: ${r.bankAddress}`)
+      ),
 
-      // Remittance
-      doc.text("Remittance Instructions:", { underline: true })
-        .text(`Beneficiary Name: ${invoice.remittance.beneficiaryName || "-"}`)
-        .text(`Account Number: ${invoice.remittance.accountNumber || "-"}`)
-        .text(`SWIFT Code: ${invoice.remittance.swiftCode || "-"}`)
-        .text(`IFS Code: ${invoice.remittance.ifsCode || "-"}`)
-        .text(`Bank Address: ${invoice.remittance.bankAddress || "-"}`)
-        .moveDown(1);
-
-      // Footer
-      doc.text(`For ${invoice.supplier.name || "-"} PRIVATE LIMITED`, { align: "left" })
-        .moveDown(4)
-        .text("Authorised Signatory", { align: "left" })
-        .moveDown(1)
-        .text(`Remarks: ${invoice.remarks || "-"}`)
-        .text(`TYPE OF CLEARANCE: ${invoice.typeOfClearance || "-"}`)
-        .end();
-    } catch (err) {
-      reject(err);
-    }
-  });
+      /* REMARK */
+      React.createElement(View, { style: styles.section },
+        React.createElement(Text, null, `Remark: ${data.remark}`)
+      )
+    )
+  );
 };
 
-module.exports = generateInvoicePDF;
+module.exports = InvoicePDF;

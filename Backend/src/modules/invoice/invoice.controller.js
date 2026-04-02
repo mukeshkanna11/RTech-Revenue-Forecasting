@@ -1,75 +1,177 @@
-const InvoiceService = require("./invoice.service");
+const service = require("./invoice.service");
+const ReactPDF = require("@react-pdf/renderer");
+const InvoicePDF = require("./invoice.pdf");
+const React = require("react");
 
-/**
- * Create a new invoice
- */
+/* =========================================
+   RESPONSE HELPER (STANDARD FORMAT)
+========================================= */
+const sendResponse = (res, { success = true, status = 200, message, data }) => {
+  res.status(status).json({
+    success,
+    message,
+    data
+  });
+};
+
+/* =========================================
+   CREATE INVOICE
+========================================= */
 exports.createInvoice = async (req, res) => {
   try {
-    const invoice = await InvoiceService.createInvoice(req.body);
-    res.status(201).json({ success: true, data: invoice });
+    const data = await service.createInvoice(req.body);
+
+    return sendResponse(res, {
+      message: "Invoice created successfully",
+      data
+    });
   } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
+    return sendResponse(res, {
+      success: false,
+      status: 400,
+      message: err.message
+    });
   }
 };
 
-/**
- * Get all invoices
- */
+/* =========================================
+   GET ALL INVOICES (PAGINATION + SEARCH)
+========================================= */
 exports.getInvoices = async (req, res) => {
   try {
-    const { page = 1, limit = 10, sortBy = "-invoiceDate" } = req.query;
-    const data = await InvoiceService.getInvoices({}, parseInt(page), parseInt(limit), sortBy);
-    res.json({ success: true, ...data });
+    const data = await service.getAllInvoices(req.query);
+
+    return sendResponse(res, {
+      message: "Invoices fetched successfully",
+      data
+    });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return sendResponse(res, {
+      success: false,
+      status: 400,
+      message: err.message
+    });
   }
 };
 
-/**
- * Get single invoice by ID
- */
-exports.getInvoiceById = async (req, res) => {
+/* =========================================
+   GET SINGLE INVOICE
+========================================= */
+exports.getInvoice = async (req, res) => {
   try {
-    const invoice = await InvoiceService.getInvoiceById(req.params.id);
-    res.json({ success: true, data: invoice });
+    const data = await service.getInvoiceById(req.params.id);
+
+    return sendResponse(res, {
+      message: "Invoice fetched successfully",
+      data
+    });
   } catch (err) {
-    res.status(404).json({ success: false, message: err.message });
+    return sendResponse(res, {
+      success: false,
+      status: 404,
+      message: err.message
+    });
   }
 };
 
-/**
- * Update an invoice by ID
- */
+/* =========================================
+   UPDATE INVOICE
+========================================= */
 exports.updateInvoice = async (req, res) => {
   try {
-    const invoice = await InvoiceService.updateInvoice(req.params.id, req.body);
-    res.json({ success: true, data: invoice });
+    const data = await service.updateInvoice(req.params.id, req.body);
+
+    return sendResponse(res, {
+      message: "Invoice updated successfully",
+      data
+    });
   } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
+    return sendResponse(res, {
+      success: false,
+      status: 400,
+      message: err.message
+    });
   }
 };
 
-/**
- * Soft delete an invoice by ID
- */
+/* =========================================
+   DELETE INVOICE
+========================================= */
 exports.deleteInvoice = async (req, res) => {
   try {
-    await InvoiceService.deleteInvoice(req.params.id);
-    res.json({ success: true, message: "Invoice deleted successfully" });
+    await service.deleteInvoice(req.params.id);
+
+    return sendResponse(res, {
+      message: "Invoice deleted successfully"
+    });
   } catch (err) {
-    res.status(404).json({ success: false, message: err.message });
+    return sendResponse(res, {
+      success: false,
+      status: 404,
+      message: err.message
+    });
   }
 };
 
-/**
- * Search invoices by keyword
- */
-exports.searchInvoices = async (req, res) => {
+/* =========================================
+   DOWNLOAD PDF (🔥 IMPORTANT FIXED)
+========================================= */
+
+
+exports.downloadInvoicePDF = async (req, res) => {
   try {
-    const { keyword, page = 1, limit = 10 } = req.query;
-    const data = await InvoiceService.searchInvoices(keyword, parseInt(page), parseInt(limit));
-    res.json({ success: true, ...data });
+    const { id } = req.params;
+
+    /* ==============================
+       VALIDATION
+    ============================== */
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Invoice ID is required"
+      });
+    }
+
+    /* ==============================
+       FETCH INVOICE
+    ============================== */
+    const invoice = await service.getInvoiceById(id);
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: "Invoice not found"
+      });
+    }
+
+    /* ==============================
+       GENERATE PDF (REACT PDF ✅)
+    ============================== */
+    const element = React.createElement(InvoicePDF, {
+      data: invoice
+    });
+
+    const stream = await ReactPDF.renderToStream(element);
+
+    /* ==============================
+       HEADERS
+    ============================== */
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename=${invoice.invoiceNumber}.pdf`
+    });
+
+    /* ==============================
+       STREAM RESPONSE
+    ============================== */
+    stream.pipe(res);
+
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error("PDF DOWNLOAD ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Internal Server Error"
+    });
   }
 };
