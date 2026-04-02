@@ -6,33 +6,12 @@ const Counter = require("./counter.model");
 ========================================= */
 const itemSchema = new mongoose.Schema(
   {
-    description: {
-      type: String,
-      required: true,
-      trim: true
-    },
-    hsn: {
-      type: String,
-      trim: true
-    },
-    value: {
-      type: Number,
-      required: true,
-      min: 0
-    },
-    igstRate: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-    igstAmount: {
-      type: Number,
-      default: 0
-    },
-    total: {
-      type: Number,
-      default: 0
-    }
+    description: { type: String, required: true, trim: true },
+    hsn: { type: String, trim: true },
+    value: { type: Number, required: true, min: 0 },
+    igstRate: { type: Number, default: 0, min: 0 },
+    igstAmount: { type: Number, default: 0 },
+    total: { type: Number, default: 0 }
   },
   { _id: false }
 );
@@ -42,34 +21,24 @@ const itemSchema = new mongoose.Schema(
 ========================================= */
 const invoiceSchema = new mongoose.Schema(
   {
+    // ✅ Make clientId optional so invoices can be created without Client module
     clientId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Client",
-      required: true,
+      required: false, // <-- changed from true to false
       index: true
     },
 
-    invoiceNumber: {
-      type: String,
-      unique: true,
-      index: true
-    },
+    invoiceNumber: { type: String, unique: true, index: true },
 
-    invoiceDate: {
-      type: Date,
-      required: true,
-      index: true
-    },
+    invoiceDate: { type: Date, required: true, index: true },
 
     agreementPO: {
       number: { type: String, trim: true },
       date: Date
     },
 
-    serviceMode: {
-      type: String,
-      default: "Online / ITES"
-    },
+    serviceMode: { type: String, default: "Online / ITES" },
 
     supplier: {
       name: String,
@@ -87,11 +56,7 @@ const invoiceSchema = new mongoose.Schema(
       validate: [(val) => val.length > 0, "At least one item required"]
     },
 
-    totalAmount: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
+    totalAmount: { type: Number, default: 0, min: 0 },
 
     remittance: {
       beneficiaryName: String,
@@ -115,21 +80,14 @@ invoiceSchema.pre("save", function (next) {
   this.items = this.items.map((item) => {
     const value = Number(item.value || 0);
     const rate = Number(item.igstRate || 0);
-
     const igstAmount = Number(((value * rate) / 100).toFixed(2));
     const totalItem = Number((value + igstAmount).toFixed(2));
-
     total += totalItem;
 
-    return {
-      ...item,
-      igstAmount,
-      total: totalItem
-    };
+    return { ...item, igstAmount, total: totalItem };
   });
 
   this.totalAmount = Number(total.toFixed(2));
-
   next();
 });
 
@@ -141,18 +99,13 @@ invoiceSchema.pre("save", async function (next) {
     const year = new Date().getFullYear();
 
     const counter = await Counter.findOneAndUpdate(
-      { key: `invoice_${year}` },   // ✅ year-based
+      { key: `invoice_${year}` },
       { $inc: { value: 1 } },
-      {
-        new: true,
-        upsert: true,
-        setDefaultsOnInsert: true
-      }
+      { new: true, upsert: true, setDefaultsOnInsert: true }
     );
 
     this.invoiceNumber = `INV-${year}-${String(counter.value).padStart(4, "0")}`;
   }
-
   next();
 });
 

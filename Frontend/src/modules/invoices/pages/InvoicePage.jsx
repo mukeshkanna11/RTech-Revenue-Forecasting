@@ -10,6 +10,7 @@ import InvoicePDF from "./InvoicePDF";
 import { Buffer } from "buffer";
 
 window.Buffer = Buffer;
+
 import {
   FileText,
   Plus,
@@ -24,67 +25,59 @@ import {
 } from "lucide-react";
 
 export default function Invoices() {
-
   const navigate = useNavigate();
 
-  const [invoices,setInvoices] = useState([]);
-  const [latest,setLatest] = useState([]);
-  const [search,setSearch] = useState("");
-  const [loading,setLoading] = useState(false);
+  // States
+  const [invoices, setInvoices] = useState([]);
+  const [latest, setLatest] = useState([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  /* -------------------------------------------------- */
-  /* FETCH INVOICES */
-  /* -------------------------------------------------- */
-
+  /* ================= FETCH INVOICES ================= */
   const fetchInvoices = async () => {
-
     try {
-
       setLoading(true);
+      setError("");
 
       const res = await API.get(`/invoices?search=${search}`);
 
-      const data = res.data.data || [];
+      // Normalize data
+     // Extract invoices correctly from nested response
+let data = [];
+if (res.data?.data?.data) {
+  data = res.data.data.data;  // <- this is where your invoices actually are
+} else if (Array.isArray(res.data)) {
+  data = res.data;
+} else if (Array.isArray(res.data.data)) {
+  data = res.data.data;
+}
 
-      setInvoices(data);
-
-      setLatest(data.slice(0,3));
-
-    } catch(err){
-
-      console.error("Invoice fetch failed",err);
+setInvoices(data);
+setLatest(data.slice(0, 3));
+    } catch (err) {
+      console.error("Invoice fetch failed:", err);
+      setError("Failed to load invoices. Please check your backend.");
       setInvoices([]);
-
-    } finally{
-
+      setLatest([]);
+    } finally {
       setLoading(false);
-
     }
-
   };
 
-  useEffect(()=>{
+  /* ================= EFFECT ================= */
+  useEffect(() => {
     fetchInvoices();
-  },[]);
+  }, [search]);
 
-  /* -------------------------------------------------- */
-  /* AUTO STATS CALCULATION (SDE-15) */
-  /* -------------------------------------------------- */
-
-  const stats = useMemo(()=>{
-
+  /* ================= STATS ================= */
+  const stats = useMemo(() => {
     const total = invoices.length;
-
-    const paidInvoices = invoices.filter(i=>i.status==="paid");
-
+    const paidInvoices = invoices.filter(i => i.status === "paid");
     const pendingInvoices = invoices.filter(
-      i => i.status==="draft" || i.status==="sent" || i.status==="pending"
+      i => ["draft", "sent", "pending"].includes(i.status)
     );
-
-    const revenue = paidInvoices.reduce(
-      (sum,i)=>sum+(i.grandTotal || 0),
-      0
-    );
+    const revenue = paidInvoices.reduce((sum, i) => sum + (i.grandTotal || 0), 0);
 
     return {
       total,
@@ -92,92 +85,47 @@ export default function Invoices() {
       pending: pendingInvoices.length,
       revenue
     };
+  }, [invoices]);
 
-  },[invoices]);
+  /* ================= DELETE ================= */
+  const deleteInvoice = async id => {
+    if (!window.confirm("Delete this invoice?")) return;
 
-  /* -------------------------------------------------- */
-  /* DELETE */
-  /* -------------------------------------------------- */
-
-  const deleteInvoice = async(id)=>{
-
-    if(!window.confirm("Delete this invoice ?")) return;
-
-    try{
-
+    try {
       await API.delete(`/invoices/${id}`);
-
       fetchInvoices();
-
-    }catch(err){
-
+    } catch (err) {
+      console.error("Delete failed:", err);
       alert("Delete failed");
-
     }
-
   };
 
-  /* -------------------------------------------------- */
-  /* EMAIL */
-  /* -------------------------------------------------- */
-
-  // const sendEmail = async(id)=>{
-
-  //   try{
-
-  //     await API.post(`/invoices/${id}/email`);
-
-  //     alert("Invoice sent");
-
-  //   }catch(err){
-
-  //     alert("Email failed");
-
-  //   }
-
-  // };
-
-  /* -------------------------------------------------- */
-  /* STATUS UPDATE */
-  /* -------------------------------------------------- */
-
-  const updateStatus = async(id,status)=>{
-
-    try{
-
-      await API.patch(`/invoices/${id}/status`,{status});
-
+  /* ================= STATUS UPDATE ================= */
+  const updateStatus = async (id, status) => {
+    try {
+      await API.patch(`/invoices/${id}/status`, { status });
       fetchInvoices();
-
-    }catch(err){
-
+    } catch (err) {
+      console.error("Status update failed:", err);
       alert("Status update failed");
-
     }
-
   };
 
-  /* -------------------------------------------------- */
-  /* VIEW INVOICE */
-  /* -------------------------------------------------- */  
+  /* ================= VIEW ================= */
+  const viewInvoice = id => {
+    navigate(`/invoices/${id}`);
+  };
 
-const viewInvoice = (id) => {
-  navigate(`/invoices/${id}`);
-};
-
-  /* -------------------------------------------------- */
-  /* DOWNLOAD PDF */
-  /* -------------------------------------------------- */
-
-  const downloadPDF = async (invoice)=>{
-
-const blob = await pdf(
-<InvoicePDF invoice={invoice}/>
-).toBlob();
-
-saveAs(blob, `invoice-${invoice.invoiceNumber}.pdf`);
-
-};
+  /* ================= DOWNLOAD PDF ================= */
+  const downloadPDF = async invoice => {
+    try {
+      const blob = await pdf(<InvoicePDF invoice={invoice} />).toBlob();
+      saveAs(blob, `invoice-${invoice.invoiceNumber}.pdf`);
+    } catch (err) {
+      console.error("PDF download failed:", err);
+      alert("PDF download failed");
+    }
+  };
 
   return (
 
@@ -202,7 +150,7 @@ saveAs(blob, `invoice-${invoice.invoiceNumber}.pdf`);
 
     {/* Title */}
     <div>
-      <h1 className="text-3xl md:text-4xl font-semibold tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
+      <h1 className="text-3xl font-semibold tracking-tight text-transparent md:text-4xl bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text">
         Invoice Management
       </h1>
       <p className="mt-1 text-sm text-gray-400">
@@ -216,7 +164,7 @@ saveAs(blob, `invoice-${invoice.invoiceNumber}.pdf`);
   <div className="flex items-center gap-3">
 
     {/* Live Indicator */}
-    <div className="hidden sm:flex items-center gap-2 px-4 py-2 border rounded-xl bg-white/5 border-white/10 backdrop-blur-md">
+    <div className="items-center hidden gap-2 px-4 py-2 border sm:flex rounded-xl bg-white/5 border-white/10 backdrop-blur-md">
       <span className="relative flex w-2 h-2">
         <span className="absolute inline-flex w-full h-full bg-green-400 rounded-full opacity-75 animate-ping"></span>
         <span className="relative inline-flex w-2 h-2 bg-green-500 rounded-full"></span>

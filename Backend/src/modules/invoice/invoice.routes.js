@@ -8,6 +8,7 @@ router.put("/:id", controller.updateInvoice);
 router.delete("/:id", controller.deleteInvoice);
 
 /* PDF ROUTE */
-router.get("/:id/pdf", controller.downloadInvoicePDF);
+// routes/invoice.routes.js
+router.get("/:id/pdf", controller.generateInvoicePDF);
 
 module.exports = router;
