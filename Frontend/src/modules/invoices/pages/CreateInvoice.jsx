@@ -1,445 +1,241 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../../utils/axios";
-import Navbar from "../../../components/layout/Navbar";
-import { Plus, Trash, ArrowLeft } from "lucide-react";
+import { Plus, Trash } from "lucide-react";
 
 export default function CreateInvoice() {
-
-const navigate = useNavigate();
-
-/* ================= CLIENT STATES ================= */
-
-const [clients,setClients] = useState([]);
-const [loadingClients,setLoadingClients] = useState(false);
-const [clientError,setClientError] = useState("");
-
-/* ================= FORM STATE ================= */
-
-const [form,setForm] = useState({
-client:"",
-items:[],
-discount:0,
-gst:18,
-paymentMethod:"UPI",
-notes:""
-});
-
-/* ================= ITEM STATE ================= */
-
-const [item,setItem] = useState({
-description:"",
-quantity:1,
-price:0
-});
-
-/* ================= FETCH CLIENTS ================= */
-
-const fetchClients = useCallback(async()=>{
-
-try{
-
-setLoadingClients(true);
-setClientError("");
-
-const res = await API.get("/clients");
-
-const list =
-res?.data?.clients ||
-res?.data?.data?.clients ||
-res?.data?.data ||
-[];
-
-setClients(Array.isArray(list) ? list : []);
-
-}catch(err){
-
-console.error("CLIENT FETCH ERROR",err);
-setClientError("Failed to load clients");
-
-}finally{
-
-setLoadingClients(false);
-
-}
-
-},[]);
-
-useEffect(()=>{
-fetchClients();
-},[fetchClients]);
-
-/* ================= SELECTED CLIENT ================= */
-
-const selectedClient = clients.find(c=>c._id===form.client);
-
-/* ================= ADD ITEM ================= */
-
-const addItem = ()=>{
-
-if(!item.description) return;
-
-setForm({
-...form,
-items:[...form.items,item]
-});
-
-setItem({
-description:"",
-quantity:1,
-price:0
-});
-
-};
-
-/* ================= REMOVE ITEM ================= */
-
-const removeItem = (index)=>{
-
-const newItems = [...form.items];
-newItems.splice(index,1);
-
-setForm({...form,items:newItems});
-
-};
-
-/* ================= CALCULATIONS ================= */
-
-const subtotal = form.items.reduce((sum,i)=>{
-
-return sum + (i.price * i.quantity);
-
-},0);
-
-const gstAmount = (subtotal * form.gst)/100;
-
-const discountAmount = (subtotal * form.discount)/100;
-
-const grandTotal = subtotal + gstAmount - discountAmount;
-
-/* ================= CREATE INVOICE ================= */
-
-const createInvoice = async () => {
-
-try {
-
-if (!form.client) {
-alert("Please select a client");
-return;
-}
-
-if (!form.items || form.items.length === 0) {
-alert("Add at least one invoice item");
-return;
-}
-
-/* ===== Find Selected Client ===== */
-
-const selectedClient = clients.find(c => c._id === form.client);
-
-if (!selectedClient) {
-alert("Client data not found");
-return;
-}
-
-/* ===== Build Payload ===== */
-
-const payload = {
-
-client: form.client,
-
-billingAddress: {
-companyName: selectedClient.companyName || "",
-address: selectedClient.address || "",
-gstNumber: selectedClient.gstNumber || "",
-email: selectedClient.email || "",
-phone: selectedClient.phone || ""
-},
-
-items: form.items.map(item => ({
-description: item.description,
-hsnCode: item.hsnCode || "",
-quantity: Number(item.quantity),
-price: Number(item.price),
-discount: Number(item.discount || 0),
-taxPercent: Number(item.taxPercent || form.gst || 0)
-})),
-
-discount: Number(form.discount || 0),
-
-gst: {
-cgst: Number(form.gst / 2 || 0),
-sgst: Number(form.gst / 2 || 0),
-igst: 0
-},
-
-paymentMethod: form.paymentMethod?.toLowerCase(),
-
-notes: form.notes || ""
-
-};
-
-/* ===== Debug Log ===== */
-
-console.log("SENDING INVOICE:", payload);
-
-/* ===== API Request ===== */
-
-const res = await API.post("/invoices", payload);
-
-if (res.data?.success) {
-
-alert("✅ Invoice Created Successfully");
-
-/* reset form */
-
-setForm({
-client: "",
-items: [],
-discount: 0,
-gst: 18,
-paymentMethod: "upi",
-notes: ""
-});
-
-/* redirect */
-
-navigate("/invoices");
-
-}
-
-} catch (err) {
-
-console.error("CREATE INVOICE ERROR:", err.response?.data || err);
-
-alert(
-err.response?.data?.message ||
-"Failed to create invoice"
-);
-
-}
-
-};
-return(
-
-<>
-<Navbar/>
-
-<div className="min-h-screen p-8 text-gray-200 bg-gray-950">
-
-{/* HEADER */}
-
-<div className="flex items-center justify-between mb-8">
-
-<div className="flex items-center gap-3">
-
-<button
-onClick={()=>navigate("/invoices")}
-className="p-2 bg-gray-800 rounded"
->
-<ArrowLeft size={18}/>
-</button>
-
-<h1 className="text-3xl font-bold">
-Create Invoice
-</h1>
-
-</div>
-
-</div>
-
-{/* CLIENT SELECT */}
-
-<div className="p-6 mb-6 border bg-gray-900 rounded-xl border-gray-800">
-
-<h2 className="mb-4 text-lg font-semibold">
-Client Information
-</h2>
-
-{loadingClients ? (
-
-<div>Loading clients...</div>
-
-) : clientError ? (
-
-<div className="text-red-400">{clientError}</div>
-
-) : (
-
-<select
-value={form.client}
-onChange={(e)=>setForm({...form,client:e.target.value})}
-className="w-full p-3 mb-4 bg-gray-800 border border-gray-700 rounded"
->
-
-<option value="">Select Client</option>
-
-{clients.map(c=>(
-<option key={c._id} value={c._id}>
-{c.companyName} ({c.email})
-</option>
-))}
-
-</select>
-
-)}
-
-{selectedClient &&(
-
-<div className="p-4 mt-4 bg-gray-800 rounded">
-
-<p><b>Company:</b> {selectedClient.companyName}</p>
-<p><b>Email:</b> {selectedClient.email}</p>
-<p><b>Phone:</b> {selectedClient.phone || "N/A"}</p>
-
-</div>
-
-)}
-
-</div>
-
-{/* ADD ITEMS */}
-
-<div className="p-6 mb-6 border bg-gray-900 rounded-xl border-gray-800">
-
-<h2 className="mb-4 text-lg font-semibold">
-Invoice Items
-</h2>
-
-<div className="grid grid-cols-3 gap-3 mb-4">
-
-<input
-placeholder="Description"
-value={item.description}
-onChange={(e)=>setItem({...item,description:e.target.value})}
-className="p-3 bg-gray-800 border border-gray-700 rounded"
-/>
-
-<input
-type="number"
-placeholder="Quantity"
-value={item.quantity}
-onChange={(e)=>setItem({...item,quantity:Number(e.target.value)})}
-className="p-3 bg-gray-800 border border-gray-700 rounded"
-/>
-
-<input
-type="number"
-placeholder="Price"
-value={item.price}
-onChange={(e)=>setItem({...item,price:Number(e.target.value)})}
-className="p-3 bg-gray-800 border border-gray-700 rounded"
-/>
-
-</div>
-
-<button
-onClick={addItem}
-className="flex items-center gap-2 px-4 py-2 mb-4 bg-indigo-600 rounded"
->
-<Plus size={16}/> Add Item
-</button>
-
-{/* ITEMS LIST */}
-
-{form.items.map((i,index)=>(
-
-<div
-key={index}
-className="flex items-center justify-between p-3 mb-2 bg-gray-800 rounded"
->
-
-<div>
-{i.description} — {i.quantity} × ₹{i.price}
-</div>
-
-<button
-onClick={()=>removeItem(index)}
-className="text-red-400"
->
-<Trash size={16}/>
-</button>
-
-</div>
-
-))}
-
-</div>
-
-{/* BILLING SUMMARY */}
-
-<div className="p-6 border bg-gray-900 rounded-xl border-gray-800">
-
-<h2 className="mb-4 text-lg font-semibold">
-Billing Summary
-</h2>
-
-<div className="grid grid-cols-2 gap-4">
-
-<div>
-
-<label>Discount %</label>
-
-<input
-type="number"
-value={form.discount}
-onChange={(e)=>setForm({...form,discount:Number(e.target.value)})}
-className="w-full p-3 mt-1 bg-gray-800 border border-gray-700 rounded"
-/>
-
-</div>
-
-<div>
-
-<label>GST %</label>
-
-<input
-type="number"
-value={form.gst}
-onChange={(e)=>setForm({...form,gst:Number(e.target.value)})}
-className="w-full p-3 mt-1 bg-gray-800 border border-gray-700 rounded"
-/>
-
-</div>
-
-</div>
-
-<div className="mt-6 space-y-2">
-
-<div className="flex justify-between">
-<span>Subtotal</span>
-<span>₹{subtotal.toFixed(2)}</span>
-</div>
-
-<div className="flex justify-between">
-<span>GST</span>
-<span>₹{gstAmount.toFixed(2)}</span>
-</div>
-
-<div className="flex justify-between">
-<span>Discount</span>
-<span>- ₹{discountAmount.toFixed(2)}</span>
-</div>
-
-<div className="flex justify-between pt-3 text-xl font-bold border-t border-gray-700">
-<span>Grand Total</span>
-<span>₹{grandTotal.toFixed(2)}</span>
-</div>
-
-</div>
-
-<button
-onClick={createInvoice}
-className="w-full py-3 mt-6 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
->
-Create Invoice
-</button>
-
-</div>
-
-</div>
-</>
-
-);
-
+  const navigate = useNavigate();
+
+  const [clients, setClients] = useState([]);
+
+  const [form, setForm] = useState({
+    clientId: "",
+    customer: { name: "", address: "", serviceMode: "Onsite / IT Services" },
+    agreementPO: { number: "", date: "" },
+    items: [],
+    remarks: "",
+    typeOfClearance: "LUT",
+    paymentMethod: "UPI"
+  });
+
+  const [item, setItem] = useState({
+    description: "",
+    hsnCode: "",
+    quantity: 1,
+    rate: 0,
+    taxPercent: 18
+  });
+
+  const [newClient, setNewClient] = useState({
+    companyName: "",
+    email: "",
+    address: ""
+  });
+
+  // ================= FETCH CLIENTS =================
+  const fetchClients = async () => {
+    const res = await API.get("/clients");
+    setClients(res.data?.data?.clients || []);
+  };
+
+  useEffect(() => {
+    fetchClients();
+  }, []);
+
+  // ================= ADD CLIENT =================
+  const addClient = async () => {
+    if (!newClient.companyName) return alert("Company name required");
+
+    const res = await API.post("/clients", newClient);
+
+    alert("Client Added");
+    setNewClient({ companyName: "", email: "", address: "" });
+    fetchClients();
+  };
+
+  // ================= AUTO FILL =================
+  useEffect(() => {
+    const selected = clients.find(c => c._id === form.clientId);
+    if (selected) {
+      setForm(prev => ({
+        ...prev,
+        customer: {
+          name: selected.companyName,
+          address: selected.address,
+          serviceMode: "Onsite / IT Services"
+        }
+      }));
+    }
+  }, [form.clientId, clients]);
+
+  // ================= ADD ITEM =================
+  const addItem = () => {
+    if (!item.description || !item.hsnCode) return alert("Enter item details");
+
+    setForm(prev => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        {
+          description: item.description,
+          hsnCode: Number(item.hsnCode),
+          quantity: Number(item.quantity),
+          rate: Number(item.rate),
+          taxPercent: Number(item.taxPercent)
+        }
+      ]
+    }));
+
+    setItem({ description: "", hsnCode: "", quantity: 1, rate: 0, taxPercent: 18 });
+  };
+
+  const removeItem = i => {
+    setForm(prev => ({
+      ...prev,
+      items: prev.items.filter((_, idx) => idx !== i)
+    }));
+  };
+
+  // ================= CALC =================
+  const summary = form.items.reduce(
+    (acc, i) => {
+      const base = i.quantity * i.rate;
+      const gst = (base * i.taxPercent) / 100;
+      acc.subtotal += base;
+      acc.gst += gst;
+      return acc;
+    },
+    { subtotal: 0, gst: 0 }
+  );
+
+  const total = summary.subtotal + summary.gst;
+
+  // ================= CREATE =================
+  const createInvoice = async () => {
+    if (!form.clientId) return alert("Select client");
+    if (!form.items.length) return alert("Add items");
+
+    const payload = {
+      clientId: form.clientId,
+
+      supplier: {
+        name: "TechNova Solutions Pvt Ltd",
+        gstin: "27ABCDE9876F2Z3",
+        cin: "U67890KA2021PTC987654",
+        iec: "IEC9876543",
+        iecDate: "2025-01-15",
+        pan: "ABCDE9876F"
+      },
+
+      customer: form.customer,
+
+      agreementPO: {
+        ...form.agreementPO,
+        date: new Date(form.agreementPO.date).toISOString()
+      },
+
+      items: form.items,
+
+      remittance: {
+        beneficiaryName: "TechNova Solutions Pvt Ltd",
+        accountNumber: "1122334455",
+        swiftCode: "TNOVINBBXXX",
+        ifsCode: "TNOV0000678",
+        bankAddress: "Hyderabad, India"
+      },
+
+      remarks: form.remarks,
+      typeOfClearance: form.typeOfClearance,
+      paymentMethod: form.paymentMethod
+    };
+
+    await API.post("/invoices", payload);
+    alert("Invoice Created");
+    navigate("/invoices");
+  };
+
+  return (
+    <div className="min-h-screen p-8 text-white bg-gray-950">
+      <div className="max-w-5xl mx-auto space-y-6">
+
+        <h1 className="text-3xl font-bold">Create Invoice</h1>
+
+        {/* CLIENT SELECT */}
+        <div className="p-6 space-y-3 bg-gray-900 rounded-xl">
+          <select
+            value={form.clientId}
+            onChange={e => setForm({ ...form, clientId: e.target.value })}
+            className="w-full p-3 bg-gray-800 rounded"
+          >
+            <option value="">Select Client</option>
+            {clients.map(c => (
+              <option key={c._id} value={c._id}>
+                {c.companyName}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* ADD CLIENT */}
+        <div className="p-6 space-y-3 bg-gray-900 rounded-xl">
+          <h2>Add Client</h2>
+          <input placeholder="Company" className="w-full p-2 bg-gray-800"
+            value={newClient.companyName}
+            onChange={e => setNewClient({ ...newClient, companyName: e.target.value })}
+          />
+          <input placeholder="Email" className="w-full p-2 bg-gray-800"
+            value={newClient.email}
+            onChange={e => setNewClient({ ...newClient, email: e.target.value })}
+          />
+          <input placeholder="Address" className="w-full p-2 bg-gray-800"
+            value={newClient.address}
+            onChange={e => setNewClient({ ...newClient, address: e.target.value })}
+          />
+          <button onClick={addClient} className="px-4 py-2 bg-green-600 rounded">
+            Add Client
+          </button>
+        </div>
+
+        {/* ITEMS */}
+        <div className="p-6 space-y-4 bg-gray-900 rounded-xl">
+          <div className="grid grid-cols-5 gap-2">
+            <input placeholder="Desc" className="p-2 bg-gray-800" value={item.description}
+              onChange={e => setItem({ ...item, description: e.target.value })}
+            />
+            <input placeholder="HSN" className="p-2 bg-gray-800" value={item.hsnCode}
+              onChange={e => setItem({ ...item, hsnCode: e.target.value })}
+            />
+            <input type="number" placeholder="Qty" className="p-2 bg-gray-800" value={item.quantity}
+              onChange={e => setItem({ ...item, quantity: e.target.value })}
+            />
+            <input type="number" placeholder="Rate" className="p-2 bg-gray-800" value={item.rate}
+              onChange={e => setItem({ ...item, rate: e.target.value })}
+            />
+            <button onClick={addItem} className="bg-indigo-600">
+              <Plus />
+            </button>
+          </div>
+
+          {form.items.map((i, idx) => (
+            <div key={idx} className="flex justify-between p-2 bg-gray-800">
+              {i.description} - ₹{i.rate}
+              <button onClick={() => removeItem(idx)}><Trash /></button>
+            </div>
+          ))}
+        </div>
+
+        {/* TOTAL */}
+        <div className="p-6 bg-gray-900 rounded-xl">
+          <div>Subtotal: ₹{summary.subtotal}</div>
+          <div>GST: ₹{summary.gst}</div>
+          <div className="font-bold">Total: ₹{total}</div>
+        </div>
+
+        <button onClick={createInvoice} className="w-full py-3 bg-indigo-600 rounded">
+          Create Invoice
+        </button>
+
+      </div>
+    </div>
+  );
 }
