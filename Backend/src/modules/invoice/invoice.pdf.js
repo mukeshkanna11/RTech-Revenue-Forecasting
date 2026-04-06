@@ -7,64 +7,91 @@ const {
   StyleSheet
 } = require("@react-pdf/renderer");
 
-/* =========================================
-   STYLES
-========================================= */
+/* ================= SAFE HELPERS ================= */
+const safe = (v) => (isNaN(Number(v)) ? 0 : Number(v));
+
+const formatCurrency = (v) =>
+  `₹ ${safe(v).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+
+/* ================= STYLES ================= */
 const styles = StyleSheet.create({
   page: {
     padding: 30,
     fontSize: 10,
     fontFamily: "Helvetica"
   },
+
   title: {
-    fontSize: 16,
+    fontSize: 18,
     textAlign: "center",
-    marginBottom: 12,
+    marginBottom: 15,
     fontWeight: "bold"
   },
+
   section: {
     marginBottom: 10
   },
+
   row: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 2
+    justifyContent: "space-between"
   },
+
+  box: {
+    border: "1px solid #ccc",
+    padding: 6,
+    width: "48%"
+  },
+
+  bold: {
+    fontWeight: "bold"
+  },
+
   tableHeader: {
     flexDirection: "row",
     borderBottom: "1px solid black",
     marginTop: 10,
-    paddingBottom: 4
+    paddingBottom: 4,
+    fontWeight: "bold"
   },
+
   tableRow: {
     flexDirection: "row",
     marginTop: 4
   },
+
   col: {
     flex: 1,
     fontSize: 9
   },
-  total: {
-    fontWeight: "bold",
-    marginTop: 8
+
+  totalBox: {
+    marginTop: 10,
+    padding: 6,
+    border: "1px solid #000"
   }
 });
 
-/* =========================================
-   HELPER
-========================================= */
-const formatCurrency = (value) =>
-  `₹ ${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+/* ================= COMPONENT ================= */
+const InvoicePDF = ({ invoice }) => {
+  // ✅ NEVER return null
+  if (!invoice) {
+    return React.createElement(
+      Document,
+      null,
+      React.createElement(Page, null,
+        React.createElement(Text, null, "No Invoice Data")
+      )
+    );
+  }
 
-/* =========================================
-   COMPONENT
-========================================= */
-const InvoicePDF = ({ data }) => {
-  if (!data) return null;
-
-  const s = data.supplier || {};
-  const r = data.remittance || {};
-  const client = data.clientId || {};
+  const s = invoice.supplier || {};
+  const r = invoice.remittance || {};
+  const customer = invoice.customer || {}; // ✅ FIXED HERE
+  const items = Array.isArray(invoice.items) ? invoice.items : [];
 
   return React.createElement(
     Document,
@@ -73,73 +100,83 @@ const InvoicePDF = ({ data }) => {
       Page,
       { size: "A4", style: styles.page },
 
-      // TITLE
+      /* ===== TITLE ===== */
       React.createElement(Text, { style: styles.title }, "TAX INVOICE"),
 
-      // INVOICE DETAILS
-      React.createElement(View, { style: styles.section },
-        React.createElement(Text, null, `Invoice No: ${data.invoiceNumber || "-"}`),
-        React.createElement(Text, null, `Invoice Date: ${data.invoiceDate ? new Date(data.invoiceDate).toLocaleDateString() : "-"}`),
-        React.createElement(Text, null, `PO No: ${data.agreementPO?.number || "-"}`),
-        React.createElement(Text, null, `PO Date: ${data.agreementPO?.date ? new Date(data.agreementPO.date).toLocaleDateString() : "-"}`),
-        React.createElement(Text, null, `Service Mode: ${data.serviceMode || "-"}`)
+      /* ===== TOP ROW ===== */
+      React.createElement(View, { style: [styles.row, styles.section] },
+
+        React.createElement(View, { style: styles.box },
+          React.createElement(Text, { style: styles.bold }, "Supplier"),
+          React.createElement(Text, null, s.name || "-"),
+          React.createElement(Text, null, `GSTIN: ${s.gstin || "-"}`),
+          React.createElement(Text, null, `PAN: ${s.pan || "-"}`),
+          React.createElement(Text, null, `Phone: ${s.phone || "-"}`)
+        ),
+
+        React.createElement(View, { style: styles.box },
+          React.createElement(Text, { style: styles.bold }, "Invoice Info"),
+          React.createElement(Text, null, `No: ${invoice.invoiceNumber || "-"}`),
+          React.createElement(Text, null,
+            `Date: ${
+              invoice.invoiceDate
+                ? new Date(invoice.invoiceDate).toLocaleDateString("en-IN")
+                : "-"
+            }`
+          ),
+          React.createElement(Text, null, `PO: ${invoice.agreementPO?.number || "-"}`)
+        )
       ),
 
-      // SUPPLIER
-      React.createElement(View, { style: styles.section },
-        React.createElement(Text, null, `Supplier: ${s.name || "-"}`),
-        React.createElement(Text, null, `GSTIN: ${s.gstin || "-"}`),
-        React.createElement(Text, null, `CIN: ${s.cin || "-"}`),
-        React.createElement(Text, null, `PAN: ${s.pan || "-"}`),
-        React.createElement(Text, null, `IEC: ${s.iec || "-"}`),
-        React.createElement(Text, null, `Email: ${s.email || "-"}`),
-        React.createElement(Text, null, `Phone: ${s.phone || "-"}`)
-      ),
+      //customer//
 
-      // CUSTOMER
       React.createElement(View, { style: styles.section },
-        React.createElement(Text, null, `Customer: ${client.name || "-"}`),
-        React.createElement(Text, null, `Address: ${client.address || "-"}`)
-      ),
+  React.createElement(Text, { style: styles.bold }, "Bill To"),
+  React.createElement(Text, null, customer?.name || "-"),
+  React.createElement(Text, null, customer?.address || "-"),
+  React.createElement(Text, null, `Phone: ${customer?.phone || "-"}`),
+  React.createElement(Text, null, `Email: ${customer?.email || "-"}`)
+),
 
-      // TABLE HEADER
+      /* ===== TABLE ===== */
       React.createElement(View, { style: styles.tableHeader },
-        ["S.No", "Description", "HSN", "Value", "IGST%", "Tax", "Total"].map((h, i) =>
+        ["#", "Description", "HSN", "Value", "IGST%", "Tax", "Total"].map((h, i) =>
           React.createElement(Text, { key: i, style: styles.col }, h)
         )
       ),
 
-      // TABLE ROWS
-      (data.items || []).map((item, i) =>
+      items.map((item, i) =>
         React.createElement(View, { style: styles.tableRow, key: i },
           React.createElement(Text, { style: styles.col }, i + 1),
           React.createElement(Text, { style: styles.col }, item.description || "-"),
           React.createElement(Text, { style: styles.col }, item.hsn || "-"),
           React.createElement(Text, { style: styles.col }, formatCurrency(item.value)),
-          React.createElement(Text, { style: styles.col }, `${item.igstRate || 0}%`),
+          React.createElement(Text, { style: styles.col }, `${safe(item.igstRate)}%`),
           React.createElement(Text, { style: styles.col }, formatCurrency(item.igstAmount)),
           React.createElement(Text, { style: styles.col }, formatCurrency(item.total))
         )
       ),
 
-      // GRAND TOTAL
-      React.createElement(View, { style: [styles.section, styles.total] },
-        React.createElement(Text, null, `Grand Total: ${formatCurrency(data.totalAmount)}`)
+      /* ===== TOTAL ===== */
+      React.createElement(View, { style: styles.totalBox },
+        React.createElement(Text, null, `Subtotal: ${formatCurrency(invoice.subtotal)}`),
+        React.createElement(Text, null, `Tax: ${formatCurrency(invoice.totalTax)}`),
+        React.createElement(Text, { style: styles.bold },
+          `Grand Total: ${formatCurrency(invoice.grandTotal)}`
+        )
       ),
 
-      // REMITTANCE
+      /* ===== REMITTANCE ===== */
       React.createElement(View, { style: styles.section },
-        React.createElement(Text, null, "Remittance Instructions"),
+        React.createElement(Text, { style: styles.bold }, "Bank Details"),
         React.createElement(Text, null, `Beneficiary: ${r.beneficiaryName || "-"}`),
         React.createElement(Text, null, `Account: ${r.accountNumber || "-"}`),
-        React.createElement(Text, null, `SWIFT: ${r.swiftCode || "-"}`),
-        React.createElement(Text, null, `IFSC: ${r.ifscCode || "-"}`),
-        React.createElement(Text, null, `Bank: ${r.bankAddress || "-"}`)
+        React.createElement(Text, null, `IFSC: ${r.ifscCode || "-"}`)
       ),
 
-      // REMARK
+      /* ===== REMARK ===== */
       React.createElement(View, { style: styles.section },
-        React.createElement(Text, null, `Remark: ${data.remark || "-"}`)
+        React.createElement(Text, null, `Remark: ${invoice.remark || "-"}`)
       )
     )
   );

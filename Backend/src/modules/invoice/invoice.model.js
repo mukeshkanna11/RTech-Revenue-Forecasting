@@ -7,9 +7,22 @@ const Counter = require("./counter.model");
 const itemSchema = new mongoose.Schema(
   {
     description: { type: String, required: true, trim: true },
-    hsn: { type: String, trim: true },
+
+    hsn: {
+      type: String,
+      required: true,
+      trim: true,
+      default: "998313" // IT Services default
+    },
+
     value: { type: Number, required: true, min: 0 },
-    igstRate: { type: Number, default: 0, min: 0 },
+
+    igstRate: {
+      type: Number,
+      default: 18, // ✅ FIXED GST
+      min: 0
+    },
+
     igstAmount: { type: Number, default: 0 },
     total: { type: Number, default: 0 }
   },
@@ -21,28 +34,36 @@ const itemSchema = new mongoose.Schema(
 ========================================= */
 const invoiceSchema = new mongoose.Schema(
   {
-    // ✅ Make clientId optional so invoices can be created without Client module
+    /* ================= CLIENT (OPTIONAL) ================= */
     clientId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Client",
-      required: false, // <-- changed from true to false
       index: true
     },
 
+    /* ================= INVOICE INFO ================= */
     invoiceNumber: { type: String, unique: true, index: true },
 
-    invoiceDate: { type: Date, required: true, index: true },
+    invoiceDate: {
+      type: Date,
+      required: true,
+      index: true
+    },
 
     agreementPO: {
       number: { type: String, trim: true },
       date: Date
     },
 
-    serviceMode: { type: String, default: "Online / ITES" },
+    serviceMode: {
+      type: String,
+      default: "Online / ITES"
+    },
 
+    /* ================= SUPPLIER ================= */
     supplier: {
-      name: String,
-      gstin: String,
+      name: { type: String, required: true },
+      gstin: { type: String, required: true },
       cin: String,
       pan: String,
       iec: String,
@@ -51,13 +72,47 @@ const invoiceSchema = new mongoose.Schema(
       phone: String
     },
 
+    /* ================= CUSTOMER ================= */
+    customer: {
+      name: { type: String, required: true },
+      address: String,
+      email: String,
+      phone: String
+    },
+
+    /* ================= ITEMS ================= */
     items: {
       type: [itemSchema],
       validate: [(val) => val.length > 0, "At least one item required"]
     },
 
-    totalAmount: { type: Number, default: 0, min: 0 },
+    /* ================= TAX SUMMARY ================= */
+    subtotal: { type: Number, default: 0 },
+    totalTax: { type: Number, default: 0 },
+    grandTotal: { type: Number, default: 0 },
 
+    totalAmount: { type: Number, default: 0 },
+
+    /* ================= GST ================= */
+    placeOfSupply: String,
+
+    /* ================= LUT DETAILS ================= */
+    lut: {
+      type: {
+        type: String,
+        default: "LUT" // or "Export"
+      },
+      arn: String,
+      date: Date
+    },
+
+    /* ================= PAYMENT ================= */
+    paymentTerms: {
+      type: String,
+      default: "Due on Receipt"
+    },
+
+    /* ================= BANK DETAILS ================= */
     remittance: {
       beneficiaryName: String,
       accountNumber: String,
@@ -66,33 +121,52 @@ const invoiceSchema = new mongoose.Schema(
       bankAddress: String
     },
 
+    /* ================= EXTRA ================= */
+    amountInWords: String,
+
+    companyDisplayName: String, // For signature block
+
+    authorisedSignatory: String,
+
     remark: String
   },
   { timestamps: true }
 );
 
 /* =========================================
-   AUTO CALCULATE ITEMS (SAFETY)
+   PRE-SAVE: CALCULATE TOTALS
 ========================================= */
 invoiceSchema.pre("save", function (next) {
-  let total = 0;
+  let subtotal = 0;
+  let totalTax = 0;
 
   this.items = this.items.map((item) => {
     const value = Number(item.value || 0);
-    const rate = Number(item.igstRate || 0);
+    const rate = Number(item.igstRate ?? 18);
+
     const igstAmount = Number(((value * rate) / 100).toFixed(2));
     const totalItem = Number((value + igstAmount).toFixed(2));
-    total += totalItem;
 
-    return { ...item, igstAmount, total: totalItem };
+    subtotal += value;
+    totalTax += igstAmount;
+
+    return {
+      ...item,
+      igstAmount,
+      total: totalItem
+    };
   });
 
-  this.totalAmount = Number(total.toFixed(2));
+  this.subtotal = Number(subtotal.toFixed(2));
+  this.totalTax = Number(totalTax.toFixed(2));
+  this.grandTotal = Number((subtotal + totalTax).toFixed(2));
+  this.totalAmount = this.grandTotal;
+
   next();
 });
 
 /* =========================================
-   AUTO INVOICE NUMBER (SAFE + YEAR BASED)
+   PRE-SAVE: AUTO INVOICE NUMBER
 ========================================= */
 invoiceSchema.pre("save", async function (next) {
   if (!this.invoiceNumber) {
@@ -101,16 +175,17 @@ invoiceSchema.pre("save", async function (next) {
     const counter = await Counter.findOneAndUpdate(
       { key: `invoice_${year}` },
       { $inc: { value: 1 } },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
+      { new: true, upsert: true }
     );
 
     this.invoiceNumber = `INV-${year}-${String(counter.value).padStart(4, "0")}`;
   }
+
   next();
 });
 
 /* =========================================
-   STATIC: FIND BY INVOICE NUMBER
+   STATIC METHODS
 ========================================= */
 invoiceSchema.statics.findByInvoiceNumber = function (invoiceNumber) {
   return this.findOne({ invoiceNumber });
@@ -121,5 +196,9 @@ invoiceSchema.statics.findByInvoiceNumber = function (invoiceNumber) {
 ========================================= */
 invoiceSchema.index({ createdAt: -1 });
 invoiceSchema.index({ invoiceNumber: 1 });
+invoiceSchema.index({ "customer.name": 1 });
 
+/* =========================================
+   EXPORT
+========================================= */
 module.exports = mongoose.model("Invoice", invoiceSchema);

@@ -1,9 +1,8 @@
 // src/modules/invoices/pages/CreateInvoice.jsx
-
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../../utils/axios";
-import { Plus, Trash, ArrowLeft } from "lucide-react";
+import { Plus, Trash, ArrowLeft, Download } from "lucide-react";
 import { pdf } from "@react-pdf/renderer";
 import { saveAs } from "file-saver";
 import InvoicePDF from "./InvoicePDF";
@@ -11,11 +10,9 @@ import InvoicePDF from "./InvoicePDF";
 export default function CreateInvoice({ onInvoiceCreated }) {
   const navigate = useNavigate();
 
-  // ================= STATES =================
   const [clients, setClients] = useState([]);
   const [loadingClients, setLoadingClients] = useState(false);
-  const [clientError, setClientError] = useState("");
-
+  const [createdInvoice, setCreatedInvoice] = useState(null);
   const [invoiceId, setInvoiceId] = useState(null);
   const [invoiceNumber, setInvoiceNumber] = useState("");
 
@@ -23,17 +20,28 @@ export default function CreateInvoice({ onInvoiceCreated }) {
     clientId: "",
     invoiceDate: "",
     agreementPO: { number: "", date: "" },
-    serviceMode: "Digital Marketing  / IT Services",
+    serviceMode: "Consulting / IT Services",
+
     supplier: {
       name: "ReadyTechSolutions Pvt Ltd",
       gstin: "29IWQPS5331L1ZH",
       cin: "U12345KA2020PTC543210",
       pan: "AAACI1234Q",
       iec: "IEC1234567",
+      iecDate: "2023-03-15",
       email: "info@readytechsolutions.in",
-      phone: "070107 97721"
+      phone: "07010797721"
     },
+
+    customer: {
+      name: "",
+      address: "",
+      email: "",
+      phone: ""
+    },
+
     items: [],
+
     remittance: {
       beneficiaryName: "ReadyTechSolutions Pvt Ltd",
       accountNumber: "334455667788",
@@ -41,22 +49,20 @@ export default function CreateInvoice({ onInvoiceCreated }) {
       ifscCode: "ICIC0001234",
       bankAddress: "ICICI Bank, Bangalore"
     },
+
     remark: ""
   });
 
-  const [item, setItem] = useState({ description: "", hsn: "", value: 0, igstRate: 0 });
+  const [item, setItem] = useState({ description: "", hsn: "", value: "", igstRate: "" });
 
   // ================= FETCH CLIENTS =================
   const fetchClients = useCallback(async () => {
     try {
       setLoadingClients(true);
-      setClientError("");
       const res = await API.get("/clients");
-      const list = res?.data?.clients || res?.data?.data?.clients || res?.data?.data || [];
-      setClients(Array.isArray(list) ? list : []);
+      setClients(res?.data?.data || []);
     } catch (err) {
       console.error(err);
-      setClientError("Failed to load clients");
     } finally {
       setLoadingClients(false);
     }
@@ -67,194 +73,161 @@ export default function CreateInvoice({ onInvoiceCreated }) {
   }, [fetchClients]);
 
   // ================= HANDLERS =================
-  const handleChange = (section, key, value) => {
-    setForm({ ...form, [section]: { ...form[section], [key]: value } });
+  const updateField = (section, key, value) => {
+    setForm((prev) => ({ ...prev, [section]: { ...prev[section], [key]: value } }));
   };
 
   // ================= ADD ITEM =================
   const addItem = () => {
-    if (!item.description) return alert("Description required");
-    const value = Number(item.value || 0);
-    const igstRate = Number(item.igstRate || 0);
-    if (isNaN(value) || isNaN(igstRate)) return alert("Invalid numbers");
+    if (!item.description || !item.value) return alert("Fill item details");
 
-    setForm((prev) => ({
-      ...prev,
-      items: [...prev.items, { ...item, value, igstRate }]
-    }));
-    setItem({ description: "", hsn: "", value: 0, igstRate: 0 });
+    const value = Number(item.value);
+    const igstRate = Number(item.igstRate || 0);
+    const igstAmount = (value * igstRate) / 100;
+
+    const newItem = { ...item, value, igstRate, igstAmount, total: value + igstAmount };
+
+    setForm((prev) => ({ ...prev, items: [...prev.items, newItem] }));
+    setItem({ description: "", hsn: "", value: "", igstRate: "" });
   };
 
   // ================= REMOVE ITEM =================
   const removeItem = (index) => {
-    setForm((prev) => ({
-      ...prev,
-      items: prev.items.filter((_, i) => i !== index)
-    }));
+    setForm((prev) => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }));
   };
 
-  // ================= CALCULATE TOTAL =================
-  const total = form.items.reduce((sum, i) => {
-    const value = Number(i.value) || 0;
-    const igstRate = Number(i.igstRate) || 0;
-    const tax = (value * igstRate) / 100;
-    return sum + value + tax;
-  }, 0);
+  // ================= TOTAL =================
+  const totalAmount = form.items.reduce((sum, i) => sum + i.total, 0);
 
   // ================= CREATE INVOICE =================
   const createInvoice = async () => {
     try {
-      if (!form.clientId) return alert("Select client");
-      if (!form.invoiceDate) return alert("Invoice Date required");
-      if (!form.agreementPO.number) return alert("PO Number required");
-      if (!form.agreementPO.date) return alert("PO Date required");
-      if (!form.items.length) return alert("Add at least 1 item");
-
-      const sanitizedItems = form.items.map((i) => {
-        const value = Number(i.value);
-        const igstRate = Number(i.igstRate);
-        const igstAmount = (value * igstRate) / 100;
-        return { ...i, value, igstRate, igstAmount, total: value + igstAmount };
-      });
-
-      const totalAmount = sanitizedItems.reduce((sum, i) => sum + i.total, 0);
+      if (!form.invoiceDate) return alert("Invoice date required");
+      if (!form.agreementPO.number) return alert("PO number required");
+      if (!form.items.length) return alert("Add items");
 
       const payload = {
-        clientId: form.clientId,
         invoiceDate: new Date(form.invoiceDate).toISOString(),
         agreementPO: {
           number: form.agreementPO.number,
-          date: new Date(form.agreementPO.date).toISOString()
+          date: form.agreementPO.date ? new Date(form.agreementPO.date).toISOString() : null
         },
         serviceMode: form.serviceMode,
         supplier: form.supplier,
-        items: sanitizedItems,
+        customer: form.customer,
+        items: form.items,
         totalAmount,
         remittance: form.remittance,
-        remark: form.remark || ""
+        remark: form.remark
       };
 
       const res = await API.post("/invoices", payload);
 
       if (res.data.success) {
-        const created = res.data.data;
-        setInvoiceId(created._id);
-        setInvoiceNumber(created.invoiceNumber);
-        alert(`✅ Invoice Created: ${created.invoiceNumber}`);
+        const data = res.data.data;
 
-        // Trigger parent refresh
-        if (typeof onInvoiceCreated === "function") {
-          onInvoiceCreated();
-        }
+        setInvoiceId(data._id);
+        setInvoiceNumber(data.invoiceNumber);
+
+        // ✅ Always attach frontend customer and remittance
+        setCreatedInvoice({ ...data, customer: form.customer, remittance: form.remittance });
+
+        alert(`✅ Invoice Created: ${data.invoiceNumber}`);
+        onInvoiceCreated?.();
       }
     } catch (err) {
-      console.error("CREATE INVOICE ERROR:", err.response?.data || err.message);
-      alert(err.response?.data?.message || err.message || "Error creating invoice");
+      console.error(err);
+      alert(err?.response?.data?.message || "Error creating invoice");
     }
   };
 
-  // ================= DOWNLOAD PDF =================
+  // ================= PDF =================
   const downloadPDF = async () => {
-    if (!invoiceId) return alert("Invoice not ready yet!");
-    const invoiceData = { ...form, invoiceNumber, createdAt: new Date() }; // can fetch from API if needed
-    const blob = await pdf(<InvoicePDF invoice={invoiceData} />).toBlob();
-    saveAs(blob, `invoice-${invoiceNumber || invoiceId}.pdf`);
+    if (!createdInvoice) return alert("Create invoice first");
+
+    const blob = await pdf(<InvoicePDF invoice={createdInvoice} />).toBlob();
+    saveAs(blob, `invoice-${createdInvoice.invoiceNumber}.pdf`);
   };
 
   // ================= UI =================
   return (
-    <div className="max-w-5xl min-h-screen p-6 mx-auto text-gray-900 bg-gray-50">
-
-      {/* BACK BUTTON */}
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-2 px-4 py-2 mb-4 bg-gray-200 rounded hover:bg-gray-300"
-      >
-        <ArrowLeft size={16} /> Back
-      </button>
-
-      <h1 className="mb-6 text-3xl font-bold">Create Invoice</h1>
-
-      {/* CLIENT */}
-      <div className="p-5 mb-6 bg-white rounded shadow">
-        <h2 className="mb-3 font-semibold">Client</h2>
-        {loadingClients ? (
-          <p>Loading...</p>
-        ) : clientError ? (
-          <p className="text-red-500">{clientError}</p>
-        ) : (
-          <select
-            className="w-full p-3 border rounded"
-            value={form.clientId}
-            onChange={(e) => setForm({ ...form, clientId: e.target.value })}
-          >
-            <option value="">Select Client</option>
-            {clients.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.companyName || c.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      {/* BASIC INFO */}
-      <div className="grid grid-cols-2 gap-4 p-5 mb-6 bg-white rounded shadow">
-        <div>
-          <label>Invoice Date</label>
-          <input type="date" className="w-full p-2 border rounded" value={form.invoiceDate} onChange={(e) => setForm({ ...form, invoiceDate: e.target.value })} />
-        </div>
-        <div>
-          <label>PO Number</label>
-          <input className="w-full p-2 border rounded" value={form.agreementPO.number} onChange={(e) => handleChange("agreementPO", "number", e.target.value)} />
-        </div>
-        <div>
-          <label>PO Date</label>
-          <input type="date" className="w-full p-2 border rounded" value={form.agreementPO.date} onChange={(e) => handleChange("agreementPO", "date", e.target.value)} />
-        </div>
-      </div>
-
-      {/* ITEMS */}
-      <div className="p-5 mb-6 bg-white rounded shadow">
-        <h2 className="mb-3 font-semibold">Items</h2>
-        <div className="grid grid-cols-4 gap-2 mb-3">
-          <input placeholder="Description" value={item.description} onChange={(e) => setItem({ ...item, description: e.target.value })} className="p-2 border rounded" />
-          <input placeholder="HSN" value={item.hsn} onChange={(e) => setItem({ ...item, hsn: e.target.value })} className="p-2 border rounded" />
-          <input type="number" placeholder="Value" value={item.value} onChange={(e) => setItem({ ...item, value: e.target.value })} className="p-2 border rounded" />
-          <input type="number" placeholder="IGST %" value={item.igstRate} onChange={(e) => setItem({ ...item, igstRate: e.target.value })} className="p-2 border rounded" />
-        </div>
-        <button onClick={addItem} className="flex gap-2 px-4 py-2 mb-3 text-white bg-blue-600 rounded hover:bg-blue-500">
-          <Plus size={16} /> Add Item
+    <div className="min-h-screen p-6 text-white bg-gray-900">
+      <div className="max-w-6xl mx-auto">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2 mb-6 text-gray-300 hover:text-white"
+        >
+          <ArrowLeft size={18} /> Back
         </button>
 
-        {form.items.map((i, idx) => (
-          <div key={idx} className="flex justify-between p-2 mt-2 bg-gray-100 rounded">
-            <span>{i.description} | ₹{i.value} | {i.igstRate}%</span>
-            <Trash onClick={() => removeItem(idx)} className="text-red-500 cursor-pointer" />
-          </div>
-        ))}
-      </div>
+        <h1 className="mb-6 text-3xl font-bold">Create Invoice</h1>
 
-      {/* REMITTANCE */}
-      <div className="p-5 mb-6 bg-white rounded shadow">
-        <h2 className="mb-3 font-semibold">Bank Details</h2>
-        <div className="grid grid-cols-2 gap-3">
-          {Object.keys(form.remittance).map((key) => (
-            <input key={key} placeholder={key} className="p-2 border rounded" value={form.remittance[key]} onChange={(e) => handleChange("remittance", key, e.target.value)} />
+        {/* BASIC */}
+        <div className="grid grid-cols-3 gap-4 p-5 mb-6 bg-gray-800 shadow rounded-xl">
+          <input type="date" value={form.invoiceDate} onChange={(e) => setForm({ ...form, invoiceDate: e.target.value })} className="input" />
+          <input placeholder="PO Number" value={form.agreementPO.number} onChange={(e) => updateField("agreementPO", "number", e.target.value)} className="input" />
+          <input type="date" value={form.agreementPO.date} onChange={(e) => updateField("agreementPO", "date", e.target.value)} className="input" />
+        </div>
+
+        {/* CUSTOMER */}
+        <div className="p-5 mb-6 bg-gray-800 shadow rounded-xl">
+          <h2 className="mb-3 font-semibold">Customer Details</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {Object.keys(form.customer).map((key) => (
+              <input key={key} placeholder={key} value={form.customer[key]} onChange={(e) => updateField("customer", key, e.target.value)} className="input" />
+            ))}
+          </div>
+        </div>
+
+        {/* ITEMS */}
+        <div className="p-5 mb-6 bg-gray-800 shadow rounded-xl">
+          <h2 className="mb-3 font-semibold">Items</h2>
+          <div className="grid grid-cols-4 gap-2 mb-3">
+            <input placeholder="Description" value={item.description} onChange={(e) => setItem({ ...item, description: e.target.value })} className="input" />
+            <input placeholder="HSN" value={item.hsn} onChange={(e) => setItem({ ...item, hsn: e.target.value })} className="input" />
+            <input type="number" placeholder="Value" value={item.value} onChange={(e) => setItem({ ...item, value: e.target.value })} className="input" />
+            <input type="number" placeholder="IGST %" value={item.igstRate} onChange={(e) => setItem({ ...item, igstRate: e.target.value })} className="input" />
+          </div>
+          <button onClick={addItem} className="flex items-center gap-2 px-4 py-2 mb-3 bg-blue-600 rounded"><Plus size={16} /> Add Item</button>
+
+          {form.items.map((i, idx) => (
+            <div key={idx} className="flex justify-between p-2 mt-2 bg-gray-700 rounded">
+              <span>{i.description} | ₹{i.total}</span>
+              <Trash onClick={() => removeItem(idx)} className="text-red-400 cursor-pointer" />
+            </div>
           ))}
         </div>
+
+        {/* BANK/REMITTANCE */}
+        <div className="p-5 mb-6 bg-gray-800 shadow rounded-xl">
+          <h2 className="mb-3 font-semibold">Bank / Remittance Details</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {Object.keys(form.remittance).map((key) => (
+              <input key={key} value={form.remittance[key]} onChange={(e) => updateField("remittance", key, e.target.value)} className="input" />
+            ))}
+          </div>
+        </div>
+
+        {/* REMARK */}
+        <textarea placeholder="Remark" value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} className="w-full p-3 mb-4 bg-gray-800 border border-gray-600 rounded" />
+
+        {/* TOTAL */}
+        <h2 className="mb-4 text-xl font-bold">Total: ₹ {totalAmount.toFixed(2)}</h2>
+
+        {/* ACTIONS */}
+        <button onClick={createInvoice} className="w-full py-3 mb-2 bg-green-600 rounded">Create Invoice</button>
+        {invoiceId && <button onClick={downloadPDF} className="flex justify-center w-full gap-2 py-3 bg-indigo-600 rounded"><Download size={16} /> Download PDF</button>}
       </div>
 
-      {/* REMARK */}
-      <textarea placeholder="Remark" className="w-full p-3 mb-4 border rounded" value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
-
-      {/* TOTAL */}
-      <div className="mb-4 text-xl font-bold">Total: ₹ {total.toFixed(2)}</div>
-
-      {/* ACTION BUTTONS */}
-      <button onClick={createInvoice} className="w-full py-3 mb-2 text-white bg-green-600 rounded hover:bg-green-500">Create Invoice</button>
-      {invoiceId && <button onClick={downloadPDF} className="w-full py-3 text-white bg-indigo-600 rounded hover:bg-indigo-500">Download PDF</button>}
-
+      <style>{`
+        .input {
+          background: #1f2937;
+          border: 1px solid #4b5563;
+          padding: 10px;
+          border-radius: 6px;
+          color: white;
+        }
+      `}</style>
     </div>
   );
 }

@@ -1,134 +1,256 @@
 import React from "react";
-import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
-import logo from "../../../assets/logo.png"; // Correct path
+import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 
-// Format currency
-const formatCurrency = (value) => `₹${typeof value === "number" ? value.toFixed(2) : "0.00"}`;
+const safe = (v) => {
+  const n = Number(v);
+  return isNaN(n) ? 0 : n;
+};
 
-// Styles
+const formatCurrency = (v) =>
+  `Rs. ${safe(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 const styles = StyleSheet.create({
-  page: { padding: 24, fontSize: 10, fontFamily: "Helvetica", backgroundColor: "#f9f9f9" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  logo: { width: 120, height: 40 },
-  companyInfo: { textAlign: "right", fontSize: 10 },
-  title: { fontSize: 20, fontWeight: "bold", color: "#1B4F72", marginBottom: 4 },
-  subtitle: { fontSize: 11, marginBottom: 2 },
-  section: { marginTop: 12, padding: 8, backgroundColor: "#ffffff", borderRadius: 6 },
-  sectionTitle: { fontSize: 12, fontWeight: "bold", marginBottom: 6, color: "#1B4F72", borderBottom: "1px solid #ccc", paddingBottom: 2 },
-  row: { flexDirection: "row", borderBottom: "1px solid #eee", paddingVertical: 6, alignItems: "center" },
-  headerRow: { flexDirection: "row", backgroundColor: "#1B4F72", color: "#fff", paddingVertical: 6, fontWeight: "bold" },
-  col1: { width: "5%", textAlign: "center" },
-  col2: { width: "35%", paddingLeft: 4 },
+  page: {
+    padding: 30,
+    fontSize: 10,
+    fontFamily: "Helvetica",
+    backgroundColor: "#ffffff"
+  },
+  header: {
+    marginBottom: 20,
+    borderBottom: "2px solid #1e40af",
+    paddingBottom: 10,
+    textAlign: "center"
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#1e40af",
+    marginBottom: 4
+  },
+  company: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#374151"
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 14
+  },
+  card: {
+    width: "48%",
+    padding: 12,
+    border: "1px solid #d1d5db",
+    borderRadius: 6
+  },
+  fullCard: {
+    width: "100%",
+    padding: 12,
+    border: "1px solid #d1d5db",
+    borderRadius: 6,
+    marginBottom: 14
+  },
+  bold: {
+    fontWeight: "bold",
+    marginBottom: 4
+  },
+  label: {
+    fontSize: 9,
+    color: "#6b7280",
+    marginBottom: 2
+  },
+  value: {
+    fontSize: 10,
+    marginBottom: 2
+  },
+  table: {
+    marginTop: 12,
+    border: "1px solid #d1d5db",
+    borderRadius: 4,
+    overflow: "hidden"
+  },
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#1e40af",
+    color: "#ffffff",
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    fontWeight: "bold",
+    textAlign: "center"
+  },
+  tableRow: {
+    flexDirection: "row",
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderBottom: "1px solid #e5e7eb"
+  },
+  col1: { width: "6%", textAlign: "center" },
+  col2: { width: "34%", textAlign: "left", paddingLeft: 4 },
   col3: { width: "10%", textAlign: "center" },
-  col4: { width: "10%", textAlign: "right" },
+  col4: { width: "14%", textAlign: "right", paddingRight: 4 },
   col5: { width: "10%", textAlign: "center" },
-  col6: { width: "10%", textAlign: "right" },
-  col7: { width: "20%", textAlign: "right" },
-  totalsWrapper: { marginTop: 16, alignItems: "flex-end" },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
-  totalLabel: { fontWeight: "bold" },
-  totalValue: { fontWeight: "bold" },
-  remittance: { marginTop: 16, fontSize: 10, lineHeight: 1.4, padding: 8, backgroundColor: "#E8F6F3", borderRadius: 6 },
-  footer: { marginTop: 20, fontSize: 9, textAlign: "center", color: "#555" },
+  col6: { width: "13%", textAlign: "right", paddingRight: 4 },
+  col7: { width: "13%", textAlign: "right", paddingRight: 4 },
+  totals: {
+    marginTop: 16,
+    padding: 12,
+    border: "1px solid #1e40af",
+    backgroundColor: "#f1f5f9",
+    borderRadius: 6
+  },
+  totalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 4
+  },
+  grand: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#1e40af"
+  },
+  remittanceTitle: {
+    fontSize: 11,
+    fontWeight: "bold",
+    marginBottom: 6,
+    color: "#1e40af"
+  },
+  remittanceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 2
+  }
 });
 
-// Main PDF
 export default function InvoicePDF({ invoice }) {
-  const client = invoice.client || invoice.clientId || {}; // Use clientId if client missing
-  const items = invoice.items || [];
-  const subtotal = items.reduce((sum, i) => sum + (i.value || 0), 0);
-  const tax = items.reduce((sum, i) => sum + ((i.value || 0) * ((i.igstRate || 0) / 100)), 0);
-  const total = subtotal + tax;
+  if (!invoice)
+    return (
+      <Document>
+        <Page>
+          <Text>No Invoice Data</Text>
+        </Page>
+      </Document>
+    );
+
+  const items = Array.isArray(invoice.items) ? invoice.items : [];
+  const customer = invoice.customer || {};
+  const supplier = invoice.supplier || {};
+  const remittance = invoice.remittance || {};
+
+  let calcSubtotal = 0,
+    calcTax = 0;
+  items.forEach((i) => {
+    calcSubtotal += safe(i.value);
+    calcTax += safe(i.igstAmount);
+  });
+
+  const subtotal = safe(invoice.subtotal ?? calcSubtotal);
+  const tax = safe(invoice.totalTax ?? calcTax);
+  const grandTotal = safe(invoice.grandTotal ?? invoice.totalAmount ?? subtotal + tax);
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-
-        {/* Header: Logo & Supplier */}
+        {/* HEADER */}
         <View style={styles.header}>
-          <Image src={logo} style={styles.logo} />
-          <View style={styles.companyInfo}>
-            <Text style={{ fontWeight: "bold" }}>{invoice.supplier?.name || "-"}</Text>
-            <Text>{invoice.supplier?.address || "-"}</Text>
-            <Text>GSTIN: {invoice.supplier?.gstin || "-"}</Text>
-            <Text>Email: {invoice.supplier?.email || "-"}</Text>
-            <Text>Phone: {invoice.supplier?.phone || "-"}</Text>
+          <Text style={styles.title}>TAX INVOICE</Text>
+          <Text style={styles.company}>{supplier.name || ""}</Text>
+        </View>
+
+        {/* Supplier & Invoice Details */}
+        <View style={styles.row}>
+          <View style={styles.card}>
+            <Text style={styles.bold}>Supplier</Text>
+            <Text style={styles.value}>{supplier.name || ""}</Text>
+            {supplier.gstin && <Text style={styles.label}>GSTIN: {supplier.gstin}</Text>}
+            {supplier.pan && <Text style={styles.label}>PAN: {supplier.pan}</Text>}
+            {supplier.phone && <Text style={styles.label}>Phone: {supplier.phone}</Text>}
+            {supplier.email && <Text style={styles.label}>Email: {supplier.email}</Text>}
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.bold}>Invoice Details</Text>
+            <Text style={styles.value}>No: {invoice.invoiceNumber || ""}</Text>
+            {invoice.invoiceDate && (
+              <Text style={styles.label}>Date: {new Date(invoice.invoiceDate).toLocaleDateString("en-IN")}</Text>
+            )}
+            {invoice.agreementPO?.number && <Text style={styles.label}>PO: {invoice.agreementPO.number}</Text>}
           </View>
         </View>
 
-        {/* Invoice Info */}
-        <View style={styles.section}>
-          <Text style={styles.title}>TAX INVOICE</Text>
-          <Text style={styles.subtitle}>Invoice No: {invoice.invoiceNumber}</Text>
-          <Text style={styles.subtitle}>Invoice Date: {invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString() : "-"}</Text>
-          <Text style={styles.subtitle}>PO No: {invoice.agreementPO?.number || "-"}</Text>
-          <Text style={styles.subtitle}>PO Date: {invoice.agreementPO?.date ? new Date(invoice.agreementPO.date).toLocaleDateString() : "-"}</Text>
-          <Text style={styles.subtitle}>Service Mode: {invoice.serviceMode || "-"}</Text>
-        </View>
-
-        {/* Customer Info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Bill To:</Text>
-          <Text>{client.companyName || client.name || "-"}</Text>
-          <Text>Address: {client.address || "-"}</Text>
-          <Text>Email: {client.email || "-"}</Text>
-          <Text>Phone: {client.phone || "-"}</Text>
+        {/* Customer */}
+        <View style={styles.fullCard}>
+          <Text style={styles.bold}>Bill To</Text>
+          <Text style={styles.value}>{customer.name || ""}</Text>
+          <Text style={styles.label}>{customer.address || ""}</Text>
+          <Text style={styles.label}>Phone: {customer.phone || ""}</Text>
+          <Text style={styles.label}>Email: {customer.email || ""}</Text>
         </View>
 
         {/* Items Table */}
-        <View style={[styles.section, { marginTop: 12 }]}>
-          <View style={styles.headerRow}>
+        <View style={styles.table}>
+          <View style={styles.tableHeader}>
             <Text style={styles.col1}>#</Text>
             <Text style={styles.col2}>Description</Text>
             <Text style={styles.col3}>HSN</Text>
             <Text style={styles.col4}>Value</Text>
-            <Text style={styles.col5}>IGST%</Text>
+            <Text style={styles.col5}>GST%</Text>
             <Text style={styles.col6}>Tax</Text>
             <Text style={styles.col7}>Total</Text>
           </View>
-
-          {items.map((item, idx) => {
-            const igstAmount = (item.value || 0) * ((item.igstRate || 0) / 100);
-            const totalItem = (item.value || 0) + igstAmount;
-            return (
-              <View key={idx} style={styles.row}>
-                <Text style={styles.col1}>{idx + 1}</Text>
-                <Text style={styles.col2}>{item.description || "-"}</Text>
-                <Text style={styles.col3}>{item.hsn || "-"}</Text>
-                <Text style={styles.col4}>{formatCurrency(item.value)}</Text>
-                <Text style={styles.col5}>{item.igstRate || 0}%</Text>
-                <Text style={styles.col6}>{formatCurrency(igstAmount)}</Text>
-                <Text style={styles.col7}>{formatCurrency(totalItem)}</Text>
-              </View>
-            );
-          })}
+          {items.map((i, idx) => (
+            <View key={idx} style={styles.tableRow}>
+              <Text style={styles.col1}>{idx + 1}</Text>
+              <Text style={styles.col2}>{i.description || ""}</Text>
+              <Text style={styles.col3}>{i.hsn || ""}</Text>
+              <Text style={styles.col4}>{formatCurrency(i.value)}</Text>
+              <Text style={styles.col5}>{safe(i.igstRate)}%</Text>
+              <Text style={styles.col6}>{formatCurrency(i.igstAmount)}</Text>
+              <Text style={styles.col7}>{formatCurrency(i.total)}</Text>
+            </View>
+          ))}
         </View>
 
         {/* Totals */}
-        <View style={styles.totalsWrapper}>
-          <View style={{ width: 220 }}>
-            <View style={styles.totalRow}><Text style={styles.totalLabel}>Subtotal:</Text><Text style={styles.totalValue}>{formatCurrency(subtotal)}</Text></View>
-            <View style={styles.totalRow}><Text style={styles.totalLabel}>Total Tax:</Text><Text style={styles.totalValue}>{formatCurrency(tax)}</Text></View>
-            <View style={styles.totalRow}><Text style={[styles.totalLabel, { fontSize: 12 }]}>Grand Total:</Text><Text style={[styles.totalValue, { fontSize: 12 }]}>{formatCurrency(total)}</Text></View>
+        <View style={styles.totals}>
+          <View style={styles.totalRow}>
+            <Text>Subtotal</Text>
+            <Text>{formatCurrency(subtotal)}</Text>
+          </View>
+          <View style={styles.totalRow}>
+            <Text>Tax</Text>
+            <Text>{formatCurrency(tax)}</Text>
+          </View>
+          <View style={styles.totalRow}>
+            <Text style={styles.grand}>Grand Total</Text>
+            <Text style={styles.grand}>{formatCurrency(grandTotal)}</Text>
           </View>
         </View>
 
         {/* Remittance */}
-        <View style={styles.remittance}>
-          <Text style={{ fontWeight: "bold" }}>Remittance Instructions:</Text>
-          <Text>Beneficiary: {invoice.remittance?.beneficiaryName || "-"}</Text>
-          <Text>Account Number: {invoice.remittance?.accountNumber || "-"}</Text>
-          <Text>SWIFT: {invoice.remittance?.swiftCode || "-"}</Text>
-          <Text>IFSC: {invoice.remittance?.ifscCode || "-"}</Text>
-          <Text>Bank: {invoice.remittance?.bankAddress || "-"}</Text>
-          <Text>Remark: {invoice.remittance?.remark || invoice.remark || "-"}</Text>
+        <View style={styles.fullCard}>
+          <Text style={styles.remittanceTitle}>Remittance / Bank Details</Text>
+          <View style={styles.remittanceRow}>
+            <Text>Beneficiary:</Text>
+            <Text>{remittance.beneficiaryName || ""}</Text>
+          </View>
+          <View style={styles.remittanceRow}>
+            <Text>Account No:</Text>
+            <Text>{remittance.accountNumber || ""}</Text>
+          </View>
+          <View style={styles.remittanceRow}>
+            <Text>IFSC:</Text>
+            <Text>{remittance.ifscCode || ""}</Text>
+          </View>
+          <View style={styles.remittanceRow}>
+            <Text>SWIFT:</Text>
+            <Text>{remittance.swiftCode || ""}</Text>
+          </View>
+          <View style={styles.remittanceRow}>
+            <Text>Bank Address:</Text>
+            <Text>{remittance.bankAddress || ""}</Text>
+          </View>
         </View>
-
-        {/* Footer */}
-        <Text style={styles.footer}>
-          This invoice is electronically generated by {invoice.supplier?.name || "-"}.
-        </Text>
-
       </Page>
     </Document>
   );

@@ -1,16 +1,25 @@
 const mongoose = require("mongoose");
-const { PDFDocument, StandardFonts } = require("pdf-lib"); // For Node PDF generation
+const { PDFDocument, StandardFonts } = require("pdf-lib");
 const service = require("./invoice.service");
-const ReactPDF = require("@react-pdf/renderer"); // Keep if you want React PDF later
-const InvoicePDF = require("./invoice.pdf"); // Your React PDF component
+
 const React = require("react");
+const ReactPDF = require("@react-pdf/renderer");
+
+// ✅ FIXED IMPORT
+const InvoicePDF = require("./invoice.pdf");
+
 const Invoice = require("./invoice.model");
 
 /* =========================================
-   RESPONSE HELPER (STANDARD FORMAT)
+   RESPONSE HELPER
 ========================================= */
-const sendResponse = (res, { success = true, status = 200, message, data }) => {
-  res.status(status).json({
+const sendResponse = (res, {
+  success = true,
+  status = 200,
+  message = "",
+  data = null
+}) => {
+  return res.status(status).json({
     success,
     message,
     data
@@ -18,38 +27,47 @@ const sendResponse = (res, { success = true, status = 200, message, data }) => {
 };
 
 /* =========================================
-   CREATE INVOICE
+   VALIDATE OBJECT ID
+========================================= */
+const validateObjectId = (id) => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new Error("Invalid invoice ID");
+  }
+};
+
+/* =========================================
+   CREATE INVOICE (SERVICE BASED)
 ========================================= */
 exports.createInvoice = async (req, res) => {
   try {
-    const invoiceData = { ...req.body }; // use all fields from body
-    const invoice = await Invoice.create(invoiceData); // create invoice
+    const result = await service.createInvoice(req.body);
 
     return sendResponse(res, {
       message: "Invoice created successfully",
-      data: invoice
+      data: result.data
     });
+
   } catch (error) {
     return sendResponse(res, {
       success: false,
       status: 400,
-      message: error.message,
-      data: error
+      message: error.message
     });
   }
 };
 
 /* =========================================
-   GET ALL INVOICES (PAGINATION + SEARCH)
+   GET ALL INVOICES
 ========================================= */
 exports.getInvoices = async (req, res) => {
   try {
-    const data = await service.getAllInvoices(req.query);
+    const result = await service.getAllInvoices(req.query);
 
     return sendResponse(res, {
       message: "Invoices fetched successfully",
-      data
+      data: result
     });
+
   } catch (err) {
     return sendResponse(res, {
       success: false,
@@ -64,12 +82,15 @@ exports.getInvoices = async (req, res) => {
 ========================================= */
 exports.getInvoice = async (req, res) => {
   try {
-    const data = await service.getInvoiceById(req.params.id);
+    validateObjectId(req.params.id);
+
+    const result = await service.getInvoiceById(req.params.id);
 
     return sendResponse(res, {
       message: "Invoice fetched successfully",
-      data
+      data: result.data
     });
+
   } catch (err) {
     return sendResponse(res, {
       success: false,
@@ -84,12 +105,15 @@ exports.getInvoice = async (req, res) => {
 ========================================= */
 exports.updateInvoice = async (req, res) => {
   try {
-    const data = await service.updateInvoice(req.params.id, req.body);
+    validateObjectId(req.params.id);
+
+    const result = await service.updateInvoice(req.params.id, req.body);
 
     return sendResponse(res, {
       message: "Invoice updated successfully",
-      data
+      data: result.data
     });
+
   } catch (err) {
     return sendResponse(res, {
       success: false,
@@ -104,11 +128,14 @@ exports.updateInvoice = async (req, res) => {
 ========================================= */
 exports.deleteInvoice = async (req, res) => {
   try {
-    await service.deleteInvoice(req.params.id);
+    validateObjectId(req.params.id);
+
+    const result = await service.deleteInvoice(req.params.id);
 
     return sendResponse(res, {
-      message: "Invoice deleted successfully"
+      message: result.message
     });
+
   } catch (err) {
     return sendResponse(res, {
       success: false,
@@ -119,123 +146,176 @@ exports.deleteInvoice = async (req, res) => {
 };
 
 /* =========================================
-   GENERATE INVOICE PDF (Node-safe)
+   COMMON PDF GENERATOR (REUSABLE)
 ========================================= */
-const generateInvoicePDFBuffer = async (invoice) => {
-  const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([600, 800]);
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
-  let y = 750;
-  const clientName = invoice.clientId?.name || "Unknown Client";
-
-  page.drawText(`Invoice: ${invoice.invoiceNumber || "INV-XXXX"}`, { x: 50, y, size: 20, font });
-  y -= 40;
-  page.drawText(`Client: ${clientName}`, { x: 50, y, size: 14, font });
-  y -= 20;
-  page.drawText(`Date: ${new Date(invoice.createdAt).toLocaleDateString()}`, { x: 50, y, size: 14, font });
-  y -= 30;
-
-  page.drawText("Items:", { x: 50, y, size: 14, font });
-  y -= 20;
-
-  if (invoice.items && invoice.items.length > 0) {
-    invoice.items.forEach((item) => {
-      page.drawText(`${item.name} - Qty: ${item.quantity} - Rs ${item.amount}`, { x: 60, y, size: 12, font });
-      y -= 20;
-    });
-  } else {
-    page.drawText("No items added.", { x: 60, y, size: 12, font });
-    y -= 20;
-  }
-
-  const total = (invoice.items || []).reduce((sum, i) => sum + i.amount, 0);
-  y -= 10;
-  page.drawText(`Total: Rs ${total}`, { x: 50, y, size: 14, font });
-
-  const pdfBytes = await pdfDoc.save();
-  return Buffer.from(pdfBytes);
-};
-
-/* ---------------- PDF ROUTE ---------------- */
-exports.generateInvoicePDF = async (req, res) => {
+const streamInvoicePDF = async (res, invoice, isDownload = false) => {
   try {
-    const { id } = req.params;
+    // ✅ Convert mongoose → plain object
+    const plainInvoice =
+      typeof invoice?.toObject === "function"
+        ? invoice.toObject()
+        : invoice;
 
-    if (!mongoose.Types.ObjectId.isValid(id))
-      return res.status(400).json({ success: false, message: "Invalid invoice ID" });
-
-    // Fetch invoice with client info
-    const invoice = await Invoice.findById(id).populate("clientId");
-    if (!invoice) return res.status(404).json({ success: false, message: "Invoice not found" });
-
-    // Compute taxes if not already done
-    if (invoice.items && invoice.items.length > 0) {
-      invoice.items = invoice.items.map(item => {
-        if (item.igstAmount == null || item.total == null) {
-          const igstAmount = Math.round((item.value * (item.igstRate || 0)) / 100);
-          const total = item.value + igstAmount;
-          return { ...item, igstAmount, total };
-        }
-        return item;
-      });
-      invoice.totalAmount = invoice.items.reduce((sum, item) => sum + item.total, 0);
+    // ✅ HARD SAFETY CHECK
+    if (!plainInvoice || typeof plainInvoice !== "object") {
+      throw new Error("Invalid invoice data for PDF");
     }
 
-    // Render PDF using ReactPDF
-    const element = React.createElement(InvoicePDF, { data: invoice });
-    const pdfStream = await ReactPDF.renderToStream(element);
+    // ✅ DEBUG (REMOVE AFTER TEST)
+    console.log("PDF DATA CHECK:", plainInvoice.customer);
 
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=${invoice.invoiceNumber || "invoice"}.pdf`);
-
-    pdfStream.pipe(res);
-    pdfStream.on("end", () => res.end());
-    pdfStream.on("error", err => {
-      console.error("PDF Stream Error:", err);
-      res.status(500).json({ success: false, message: "PDF generation failed" });
+    // ✅ CREATE ELEMENT (NO JSX)
+    const element = React.createElement(InvoicePDF, {
+      invoice: plainInvoice
     });
 
-  } catch (err) {
-    console.error("PDF DOWNLOAD ERROR:", err);
-    res.status(500).json({ success: false, message: err.message || "Internal Server Error" });
+    if (!element) {
+      throw new Error("React element creation failed");
+    }
+
+    // ✅ RENDER STREAM
+    const stream = await ReactPDF.renderToStream(element);
+
+    // ✅ HEADERS
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `${isDownload ? "attachment" : "inline"}; filename=${
+        plainInvoice.invoiceNumber || "invoice"
+      }.pdf`
+    );
+
+    // ✅ PIPE RESPONSE
+    stream.pipe(res);
+
+    stream.on("end", () => {
+      res.end();
+    });
+
+    stream.on("error", (err) => {
+      console.error("PDF STREAM ERROR:", err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          message: "PDF stream failed"
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error("STREAM FUNCTION ERROR:", error);
+    throw error;
   }
 };
 
 /* =========================================
-   DOWNLOAD INVOICE PDF (ReactPDF-safe)
+   VIEW PDF (INLINE)
 ========================================= */
+exports.generateInvoicePDF = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    validateObjectId(id);
+
+    const invoiceDoc = await service.getInvoiceForPDF(id);
+
+    if (!invoiceDoc) {
+      return sendResponse(res, {
+        success: false,
+        status: 404,
+        message: "Invoice not found"
+      });
+    }
+
+    // ✅ USE COMMON FUNCTION
+    await streamInvoicePDF(res, invoiceDoc, false);
+
+  } catch (err) {
+    console.error("PDF ERROR:", err);
+
+    return sendResponse(res, {
+      success: false,
+      status: 500,
+      message: err.message
+    });
+  }
+};
+
+/* =========================================
+   DOWNLOAD INVOICE PDF
+========================================= */
+/* =========================================
+   DOWNLOAD PDF (UPDATED VERSION)
+   ✅ Bill To always populated
+========================================= */
+// controllers/invoiceController.js
 exports.downloadInvoicePDF = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!id) 
-      return res.status(400).json({ success: false, message: "Invoice ID required" });
+    const React = require("react");
+    const ReactPDF = require("@react-pdf/renderer");
+    const InvoicePDF = require("./invoice.pdf").default;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Invalid invoice ID" });
-    }
+    // 1️⃣ FETCH INVOICE (lean for plain object)
+    let invoice = await Invoice.findById(id).lean();
+    if (!invoice) throw new Error("Invoice not found");
 
-    const invoice = await Invoice.findById(id).populate("clientId");
-    if (!invoice) 
-      return res.status(404).json({ success: false, message: "Invoice not found" });
+    // 2️⃣ ENSURE CUSTOMER EXISTS (use real data if present)
+    invoice.customer =
+      invoice.customer && Object.keys(invoice.customer).length > 0
+        ? invoice.customer
+        : invoice.client || invoice.customerDetails || {
+            name: "",
+            address: "",
+            email: "",
+            phone: ""
+          };
 
-    // Safe ReactPDF rendering
-    const element = React.createElement(InvoicePDF, { data: invoice });
-    const pdfStream = await ReactPDF.renderToStream(element);
+    // 3️⃣ CALCULATE TOTALS
+    let subtotal = 0;
+    let tax = 0;
 
+    (invoice.items || []).forEach((item) => {
+      subtotal += Number(item.value || 0);
+      tax += Number(item.igstAmount || 0);
+    });
+
+    invoice.subtotal = invoice.subtotal ?? subtotal;
+    invoice.totalTax = invoice.totalTax ?? tax;
+    invoice.grandTotal =
+      invoice.grandTotal ?? invoice.totalAmount ?? subtotal + tax;
+
+    // 4️⃣ DEBUG (optional)
+    console.log("FINAL PDF DATA:", invoice);
+
+    // 5️⃣ CREATE PDF ELEMENT
+    const element = React.createElement(InvoicePDF, { invoice });
+
+    // 6️⃣ GENERATE PDF STREAM
+    const stream = await ReactPDF.renderToStream(element);
+
+    // 7️⃣ SET HEADERS
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=${invoice.invoiceNumber || "invoice"}.pdf`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=${invoice.invoiceNumber || "invoice"}.pdf`
+    );
 
-    pdfStream.pipe(res);
-    pdfStream.on("end", () => res.end());
-    pdfStream.on("error", (err) => {
-      console.error("PDF Stream Error:", err);
-      res.status(500).json({ success: false, message: "PDF generation failed" });
+    // 8️⃣ PIPE PDF TO RESPONSE
+    stream.pipe(res);
+    stream.on("end", () => res.end());
+    stream.on("error", (err) => {
+      console.error("PDF STREAM ERROR:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: "PDF generation failed" });
+      }
     });
 
   } catch (err) {
-    console.error("PDF DOWNLOAD ERROR:", err);
-    res.status(500).json({ success: false, message: err.message || "Internal Server Error" });
+    console.error("PDF ERROR:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: err.message });
+    }
   }
 };
