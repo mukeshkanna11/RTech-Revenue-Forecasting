@@ -10,85 +10,84 @@ const generateToken = (user) => {
     {
       id: user._id,
       email: user.email,
-      role: user.role
+      role: user.role,
     },
     process.env.JWT_SECRET,
-    { expiresIn: "7d" }
+    { expiresIn: process.env.JWT_EXPIRE || "7d" }
   );
 };
 
 /**
- * Register User
+ * REGISTER USER
  */
 exports.registerUser = async (data) => {
-  try {
-    const email = data.email.toLowerCase();
+  const email = data.email.toLowerCase();
 
-    // check existing user
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      throw new Error("User already exists with this email");
-    }
-
-    // hash password
-    const hashedPassword = await bcrypt.hash(data.password, 10);
-
-    // create user
-    const user = await User.create({
-      name: data.name,
-      email: email,
-      password: hashedPassword,
-      role: data.role || "user"
-    });
-
-    // remove password from response
-    const userObj = user.toObject();
-    delete userObj.password;
-
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
     return {
-      message: "User registered successfully",
-      user: userObj
+      success: false,
+      statusCode: 400,
+      message: "User already exists with this email",
     };
-  } catch (error) {
-    throw error;
   }
+
+  const hashedPassword = await bcrypt.hash(data.password, 10);
+
+  const user = await User.create({
+    name: data.name,
+    email,
+    password: hashedPassword,
+    role: data.role || "user",
+  });
+
+  const userObj = user.toObject();
+  delete userObj.password;
+
+  return {
+    success: true,
+    statusCode: 201,
+    user: userObj,
+  };
 };
 
 /**
- * Login User
+ * LOGIN USER
  */
 exports.loginUser = async (email, password) => {
-  try {
-    const normalizedEmail = email.toLowerCase();
+  const normalizedEmail = email.toLowerCase();
 
-    // find user
-    const user = await User.findOne({ email: normalizedEmail });
+  const user = await User.findOne({ email: normalizedEmail });
 
-    if (!user) {
-      throw new Error("Invalid email or password");
-    }
-
-    // compare password
-    const isMatch = await bcrypt.compare(password, user.password);
-
-    if (!isMatch) {
-      throw new Error("Invalid email or password");
-    }
-
-    // generate token
-    const token = generateToken(user);
-
-    // remove password
-    const userObj = user.toObject();
-    delete userObj.password;
-
+  // ❌ user not found
+  if (!user) {
     return {
-      message: "Login successful",
-      token,
-      user: userObj
+      success: false,
+      statusCode: 401,
+      message: "Invalid email or password",
     };
-
-  } catch (error) {
-    throw error;
   }
+
+  const isMatch = await bcrypt.compare(password, user.password);
+
+  // ❌ wrong password
+  if (!isMatch) {
+    return {
+      success: false,
+      statusCode: 401,
+      message: "Invalid email or password",
+    };
+  }
+
+  const token = generateToken(user);
+
+  const userObj = user.toObject();
+  delete userObj.password;
+
+  return {
+    success: true,
+    statusCode: 200,
+    token,
+    user: userObj,
+  };
 };
