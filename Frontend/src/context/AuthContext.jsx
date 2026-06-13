@@ -7,121 +7,149 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore session
+  // Restore Session
   useEffect(() => {
-    const token =
-      localStorage.getItem("token") || sessionStorage.getItem("token");
-    const userData =
-      localStorage.getItem("user") || sessionStorage.getItem("user");
+    try {
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
 
-    if (token && userData) {
-      try {
-        setUser(JSON.parse(userData));
-      } catch {
-        console.warn("Invalid stored user data");
+      const storedUser =
+        localStorage.getItem("user") || sessionStorage.getItem("user");
+
+      if (token && storedUser) {
+        setUser(JSON.parse(storedUser));
       }
-    }
+    } catch (error) {
+      console.error("Session restore failed:", error);
 
-    setLoading(false);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("user");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // 🔥 Helper: delay (for retry)
-  const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  // 🔥 Login with retry + smart error handling
+  // Login
   const login = async (email, password, rememberMe = false) => {
-    // 🌐 Check internet first
     if (!navigator.onLine) {
       throw new Error("No internet connection");
     }
 
-    let lastError;
+    let lastError = null;
 
-    // 🔁 Retry 2 times (important for Render cold start)
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const res = await API.post(
           "/auth/login",
           { email, password },
-          { timeout: 20000 } // ⏳ increase timeout
+          { timeout: 20000 }
         );
 
-        const { accessToken, user } = res.data;
+        console.log("LOGIN RESPONSE:", res.data);
 
-        if (!accessToken) {
-          throw new Error(res.data?.message || "Invalid credentials");
+        const token = res.data.token;
+        const user = res.data.user;
+
+        if (!token || !user) {
+          throw new Error("Invalid login response");
         }
 
-        // 💾 Store session
-        if (rememberMe) {
-          localStorage.setItem("token", accessToken);
-          localStorage.setItem("user", JSON.stringify(user));
-        } else {
-          sessionStorage.setItem("token", accessToken);
-          sessionStorage.setItem("user", JSON.stringify(user));
-        }
+        const storage = rememberMe ? localStorage : sessionStorage;
+
+        storage.setItem("token", token);
+        storage.setItem("user", JSON.stringify(user));
 
         setUser(user);
+
         return user;
       } catch (err) {
         lastError = err;
 
-        // 🚨 If backend unreachable (Render cold start)
         if (!err.response) {
-          console.warn(`Retrying login... attempt ${attempt + 1}`);
-          await wait(2000); // wait 2s before retry
+          console.warn(
+            `Login retry ${attempt + 1}/2 - server may be waking up`
+          );
+
+          await wait(2000);
           continue;
         }
 
-        // ❌ Stop retry for real API errors
         break;
       }
     }
 
-    // 🔥 Final error handling (HR-safe messages)
-    if (!lastError.response) {
+    if (!lastError?.response) {
       throw new Error(
-        "Server is starting... please wait a few seconds and try again"
+        "Server is starting. Please wait a few seconds and try again."
       );
     }
 
-    if (lastError.response?.status === 401) {
-      throw new Error("Invalid email or password");
-    }
+    switch (lastError.response.status) {
+      case 400:
+        throw new Error(
+          lastError.response.data?.message || "Invalid request"
+        );
 
-    if (lastError.response?.status === 500) {
-      throw new Error("Server error. Please try again later");
-    }
+      case 401:
+        throw new Error("Invalid email or password");
 
-    throw new Error(
-      lastError.response?.data?.message || "Login failed. Please try again"
-    );
+      case 403:
+        throw new Error("Access denied");
+
+      case 404:
+        throw new Error("Service unavailable");
+
+      case 500:
+        throw new Error("Server error. Please try again later");
+
+      default:
+        throw new Error(
+          lastError.response.data?.message || "Login failed"
+        );
+    }
   };
 
-  // 🚪 Logout
+  // Logout
   const logout = () => {
-    localStorage.clear();
-    sessionStorage.clear();
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
+
     setUser(null);
   };
 
-  // 🔗 Social login
+  // Social Login
   const socialLogin = async (provider) => {
     try {
-      const res = await API.post(`/auth/${provider}`, {}, { timeout: 20000 });
+      const res = await API.post(
+        `/auth/${provider}`,
+        {},
+        { timeout: 20000 }
+      );
 
-      const { accessToken, user } = res.data;
+      const token = res.data.token;
+      const user = res.data.user;
 
-      if (!accessToken) throw new Error("Social login failed");
+      if (!token || !user) {
+        throw new Error("Invalid social login response");
+      }
 
-      localStorage.setItem("token", accessToken);
+      localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
 
       setUser(user);
+
       return user;
     } catch (err) {
       if (!err.response) {
-        throw new Error("Network issue. Please try again");
+        throw new Error("Network error. Please try again.");
       }
 
       throw new Error(
@@ -132,12 +160,18 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, login, logout, socialLogin, loading }}
+      value={{
+        user,
+        login,
+        logout,
+        socialLogin,
+        loading,
+        isAuthenticated: !!user,
+      }}
     >
       {children}
     </AuthContext.Provider>
   );
 };
 
-// Hook
 export const useAuth = () => useContext(AuthContext);
