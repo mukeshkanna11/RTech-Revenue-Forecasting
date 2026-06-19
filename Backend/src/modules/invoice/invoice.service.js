@@ -1,156 +1,200 @@
 const Invoice = require("./invoice.model");
+const { toWords } = require("number-to-words");
 
-/* =========================================
-   HELPER: NUMBER TO WORDS (BASIC)
-========================================= */
-const numberToWords = (num) => {
-  const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
-    "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
-    "Seventeen", "Eighteen", "Nineteen"];
-  const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+/* ==================================================
+   HELPER: NUMBER TO WORDS
+================================================== */
 
-  if ((num = num.toString()).length > 9) return "Overflow";
-
-  const n = ("000000000" + num).substr(-9).match(/.{1,2}/g);
-  let str = "";
-
-  str += (Number(n[0]) !== 0) ? (a[Number(n[0])] || b[n[0][0]] + " " + a[n[0][1]]) + " Crore " : "";
-  str += (Number(n[1]) !== 0) ? (a[Number(n[1])] || b[n[1][0]] + " " + a[n[1][1]]) + " Lakh " : "";
-  str += (Number(n[2]) !== 0) ? (a[Number(n[2])] || b[n[2][0]] + " " + a[n[2][1]]) + " Thousand " : "";
-  str += (Number(n[3]) !== 0) ? (a[Number(n[3])] || b[n[3][0]] + " " + a[n[3][1]]) + " Hundred " : "";
-  str += (Number(n[4]) !== 0) ? ((str !== "") ? "and " : "") +
-    (a[Number(n[4])] || b[n[4][0]] + " " + a[n[4][1]]) + " " : "";
-
-  return str.trim() + " Only";
+const amountToWords = (amount) => {
+  try {
+    return `${toWords(Math.round(amount))} Rupees Only`
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  } catch {
+    return "";
+  }
 };
 
-/* =========================================
-   HELPER: CALCULATE ITEMS + TAX
-========================================= */
-const calculateInvoice = (items = []) => {
+/* ==================================================
+   CALCULATE INVOICE TOTALS
+================================================== */
+
+const calculateInvoice = (
+  items = [],
+  taxType = "IGST",
+  otherCharges = 0,
+  tdsAmount = 0
+) => {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error("At least one item is required");
   }
 
   let subtotal = 0;
-  let totalTax = 0;
+  let discountAmount = 0;
+
+  let cgstTotal = 0;
+  let sgstTotal = 0;
+  let igstTotal = 0;
 
   const updatedItems = items.map((item, index) => {
-    const value = Number(item.value || 0);
-    const rate = Number(item.igstRate ?? 18); // default 18%
+    const quantity = Number(item.quantity || 1);
+    const unitPrice = Number(item.unitPrice || 0);
+    const discount = Number(item.discount || 0);
 
-    if (!isFinite(value) || !isFinite(rate)) {
-      throw new Error(`Invalid item at position ${index + 1}`);
+    if (!isFinite(quantity) || !isFinite(unitPrice)) {
+      throw new Error(
+        `Invalid item data at row ${index + 1}`
+      );
     }
 
-    const igstAmount = Number(((value * rate) / 100).toFixed(2));
-    const total = Number((value + igstAmount).toFixed(2));
+    const taxableValue =
+      quantity * unitPrice - discount;
 
-    subtotal += value;
-    totalTax += igstAmount;
+    let cgstAmount = 0;
+    let sgstAmount = 0;
+    let igstAmount = 0;
+
+    if (taxType === "CGST_SGST") {
+      cgstAmount =
+        (taxableValue *
+          Number(item.cgstRate || 9)) /
+        100;
+
+      sgstAmount =
+        (taxableValue *
+          Number(item.sgstRate || 9)) /
+        100;
+    }
+
+    if (taxType === "IGST") {
+      igstAmount =
+        (taxableValue *
+          Number(item.igstRate || 18)) /
+        100;
+    }
+
+    const total =
+      taxableValue +
+      cgstAmount +
+      sgstAmount +
+      igstAmount;
+
+    subtotal += taxableValue;
+    discountAmount += discount;
+
+    cgstTotal += cgstAmount;
+    sgstTotal += sgstAmount;
+    igstTotal += igstAmount;
 
     return {
       description: item.description,
       hsn: item.hsn || "998313",
-      value,
-      igstRate: rate,
-      igstAmount,
-      total,
+
+      quantity,
+
+      unitPrice,
+
+      discount,
+
+      taxableValue: Number(
+        taxableValue.toFixed(2)
+      ),
+
+      cgstRate: Number(
+        item.cgstRate || 9
+      ),
+
+      sgstRate: Number(
+        item.sgstRate || 9
+      ),
+
+      igstRate: Number(
+        item.igstRate || 18
+      ),
+
+      cgstAmount: Number(
+        cgstAmount.toFixed(2)
+      ),
+
+      sgstAmount: Number(
+        sgstAmount.toFixed(2)
+      ),
+
+      igstAmount: Number(
+        igstAmount.toFixed(2)
+      ),
+
+      total: Number(total.toFixed(2))
     };
   });
 
-  const grandTotal = Number((subtotal + totalTax).toFixed(2));
+  const grandTotal =
+    subtotal +
+    cgstTotal +
+    sgstTotal +
+    igstTotal +
+    Number(otherCharges || 0) -
+    Number(tdsAmount || 0);
 
   return {
-    updatedItems,
-    subtotal: Number(subtotal.toFixed(2)),
-    totalTax: Number(totalTax.toFixed(2)),
-    grandTotal,
-    amountInWords: numberToWords(Math.round(grandTotal))
+    items: updatedItems,
+
+    subtotal: Number(
+      subtotal.toFixed(2)
+    ),
+
+    discountAmount: Number(
+      discountAmount.toFixed(2)
+    ),
+
+    cgstTotal: Number(
+      cgstTotal.toFixed(2)
+    ),
+
+    sgstTotal: Number(
+      sgstTotal.toFixed(2)
+    ),
+
+    igstTotal: Number(
+      igstTotal.toFixed(2)
+    ),
+
+    grandTotal: Number(
+      grandTotal.toFixed(2)
+    ),
+
+    totalAmount: Number(
+      grandTotal.toFixed(2)
+    ),
+
+    amountInWords:
+      amountToWords(grandTotal)
   };
 };
 
-/* =========================================
+/* ==================================================
    CREATE INVOICE
-========================================= */
+================================================== */
+
 exports.createInvoice = async (body) => {
-  try {
-    if (!body.supplier?.name) throw new Error("Supplier details required");
-    if (!body.customer?.name) throw new Error("Customer details required");
-
-    const {
-      updatedItems,
-      subtotal,
-      totalTax,
-      grandTotal,
-      amountInWords
-    } = calculateInvoice(body.items);
-
-    const invoice = await Invoice.create({
-      ...body,
-
-      // ✅ FORCE CUSTOMER (IMPORTANT)
-      customer: {
-  name: body.customer.name || "",
-  address: body.customer.address || "",
-  email: body.customer.email || "",
-  phone: body.customer.phone || ""
-},
-
-      items: updatedItems,
-      subtotal,
-      totalTax,
-      grandTotal,
-      totalAmount: grandTotal,
-      amountInWords
-    });
-
-    return {
-      success: true,
-      data: invoice
-    };
-
-  } catch (err) {
-    throw new Error(err.message);
+  if (!body.supplier?.name) {
+    throw new Error("Supplier name is required");
   }
-};
 
-/* =========================================
-   GET ALL INVOICES
-========================================= */
-exports.getAllInvoices = async ({ page = 1, limit = 10, search = "" }) => {
-  const query = search
-    ? { invoiceNumber: { $regex: search, $options: "i" } }
-    : {};
+  if (!body.customer?.name) {
+    throw new Error("Customer name is required");
+  }
 
-  const skip = (page - 1) * limit;
+  const totals = calculateInvoice(
+    body.items,
+    body.taxType,
+    body.otherCharges,
+    body.tdsAmount
+  );
 
-  const [data, total] = await Promise.all([
-    Invoice.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit),
-
-    Invoice.countDocuments(query)
-  ]);
-
-  return {
-    success: true,
-    data,
-    meta: {
-      total,
-      page,
-      pages: Math.ceil(total / limit)
-    }
-  };
-};
-
-/* =========================================
-   GET SINGLE INVOICE
-========================================= */
-exports.getInvoiceById = async (id) => {
-  const invoice = await Invoice.findById(id);
-  if (!invoice) throw new Error("Invoice not found");
+  const invoice = await Invoice.create({
+    ...body,
+    ...totals
+  });
 
   return {
     success: true,
@@ -158,178 +202,252 @@ exports.getInvoiceById = async (id) => {
   };
 };
 
-/* =========================================
+/* ==================================================
+   GET ALL INVOICES
+================================================== */
+
+exports.getAllInvoices = async ({
+  page = 1,
+  limit = 10,
+  search = "",
+  status
+}) => {
+  const query = {};
+
+  if (search) {
+    query.$or = [
+      {
+        invoiceNumber: {
+          $regex: search,
+          $options: "i"
+        }
+      },
+      {
+        "customer.name": {
+          $regex: search,
+          $options: "i"
+        }
+      }
+    ];
+  }
+
+  if (status) {
+    query.paymentStatus = status;
+  }
+
+  const skip =
+    (Number(page) - 1) *
+    Number(limit);
+
+  const [data, total] =
+    await Promise.all([
+      Invoice.find(query)
+        .sort({
+          createdAt: -1
+        })
+        .skip(skip)
+        .limit(Number(limit)),
+
+      Invoice.countDocuments(query)
+    ]);
+
+  return {
+    success: true,
+    data,
+    meta: {
+      total,
+      page: Number(page),
+      limit: Number(limit),
+      pages: Math.ceil(
+        total / limit
+      )
+    }
+  };
+};
+
+/* ==================================================
+   GET SINGLE INVOICE
+================================================== */
+
+exports.getInvoiceById = async (
+  id
+) => {
+  const invoice =
+    await Invoice.findById(id);
+
+  if (!invoice) {
+    throw new Error(
+      "Invoice not found"
+    );
+  }
+
+  return {
+    success: true,
+    data: invoice
+  };
+};
+
+/* ==================================================
    UPDATE INVOICE
-========================================= */
-exports.updateInvoice = async (id, body) => {
-  const existing = await Invoice.findById(id);
-  if (!existing) throw new Error("Invoice not found");
+================================================== */
 
-  let updatedData = { ...body };
+exports.updateInvoice = async (
+  id,
+  body
+) => {
+  const existing =
+    await Invoice.findById(id);
 
-  if (body.items) {
-    const calc = calculateInvoice(body.items);
-    updatedData = {
-      ...updatedData,
-      items: calc.updatedItems,
-      subtotal: calc.subtotal,
-      totalTax: calc.totalTax,
-      grandTotal: calc.grandTotal,
-      totalAmount: calc.grandTotal,
-      amountInWords: calc.amountInWords
+  if (!existing) {
+    throw new Error(
+      "Invoice not found"
+    );
+  }
+
+  let updateData = {
+    ...body
+  };
+
+  const items =
+    body.items || existing.items;
+
+  const taxType =
+    body.taxType || existing.taxType;
+
+  const otherCharges =
+    body.otherCharges ??
+    existing.otherCharges ??
+    0;
+
+  const tdsAmount =
+    body.tdsAmount ??
+    existing.tdsAmount ??
+    0;
+
+  /* =================================
+     RECALCULATE TOTALS
+  ================================= */
+
+  if (
+    body.items ||
+    body.taxType ||
+    body.otherCharges !== undefined ||
+    body.tdsAmount !== undefined
+  ) {
+    const totals = calculateInvoice(
+      items,
+      taxType,
+      otherCharges,
+      tdsAmount
+    );
+
+    updateData = {
+      ...updateData,
+      ...totals
     };
   }
 
-  const updatedInvoice = await Invoice.findByIdAndUpdate(id, updatedData, {
-    new: true,
-    runValidators: true
-  });
+  const invoice =
+    await Invoice.findByIdAndUpdate(
+      id,
+      updateData,
+      {
+        new: true,
+        runValidators: true
+      }
+    );
 
   return {
     success: true,
-    data: updatedInvoice
+    data: invoice
   };
 };
 
-/* =========================================
+/* ==================================================
    DELETE INVOICE
-========================================= */
-exports.deleteInvoice = async (id) => {
-  const invoice = await Invoice.findById(id);
-  if (!invoice) throw new Error("Invoice not found");
+================================================== */
 
-  await Invoice.findByIdAndDelete(id);
+exports.deleteInvoice = async (
+  id
+) => {
+  const invoice =
+    await Invoice.findById(id);
 
-  return {
-    success: true,
-    message: "Invoice deleted successfully"
-  };
-};
-
-/* =========================================
-   GET INVOICE FOR PDF
-========================================= */
-/* =========================================
-   GET INVOICE FOR PDF (FIXED)
-========================================= */
-exports.getInvoiceForPDF = async (id) => {
-  const invoice = await Invoice.findById(id).lean();
-
-  if (!invoice) throw new Error("Invoice not found");
-
-  // ✅ FIX: ensure customer key exists
-  if (!invoice.customer && invoice.client) {
-    invoice.customer = invoice.client;
+  if (!invoice) {
+    throw new Error(
+      "Invoice not found"
+    );
   }
 
-  // ✅ DEBUG FULL DATA
-  console.log("FULL PDF DATA:", invoice);
+  await Invoice.findByIdAndDelete(
+    id
+  );
 
-  return invoice;
+  return {
+    success: true,
+    message:
+      "Invoice deleted successfully"
+  };
 };
 
-/* =========================================
-   DOWNLOAD PDF (CLEAN VERSION)
-========================================= */
-exports.downloadInvoicePDF = async (req, res) => {
-  try {
-    const { id } = req.params;
+/* ==================================================
+   GET PDF DATA
+================================================== */
 
-    const React = require("react");
-    const ReactPDF = require("@react-pdf/renderer");
-    const InvoicePDF = require("./invoice.pdf").default;
+exports.getInvoiceForPDF =
+  async (id) => {
+    const invoice =
+      await Invoice.findById(id)
+        .lean();
 
-    // ✅ 1. FETCH DATA (LEAN OBJECT)
-    let invoice = await Invoice.findById(id).lean();
-
-    if (!invoice) throw new Error("Invoice not found");
-
-    /* ===============================
-       ✅ CUSTOMER FIX (FINAL)
-    =============================== */
-    invoice.customer =
-      invoice.customer && Object.keys(invoice.customer).length > 0
-        ? invoice.customer
-        : invoice.client ||
-          invoice.customerDetails || {
-            name: "",
-            address: "",
-            email: "",
-            phone: ""
-          };
-
-    /* ===============================
-       ✅ TOTAL FIX (VERY IMPORTANT)
-    =============================== */
-    let subtotal = 0;
-    let tax = 0;
-
-    (invoice.items || []).forEach((item) => {
-      subtotal += Number(item.value || 0);
-      tax += Number(item.igstAmount || 0);
-    });
-
-    invoice.subtotal = invoice.subtotal || subtotal;
-    invoice.totalTax = invoice.totalTax || tax;
-    invoice.grandTotal =
-      invoice.grandTotal ||
-      invoice.totalAmount ||
-      subtotal + tax;
-
-    /* ===============================
-       ✅ DEBUG
-    =============================== */
-    console.log("FINAL PDF DATA:", invoice);
-
-    /* ===============================
-       ✅ CREATE PDF ELEMENT
-    =============================== */
-    const element = React.createElement(InvoicePDF, {
-      invoice
-    });
-
-    if (!element) {
-      throw new Error("Failed to create PDF element");
+    if (!invoice) {
+      throw new Error(
+        "Invoice not found"
+      );
     }
 
-    /* ===============================
-       ✅ GENERATE STREAM
-    =============================== */
-    const stream = await ReactPDF.renderToStream(element);
+    invoice.customer =
+      invoice.customer || {};
 
-    /* ===============================
-       ✅ HEADERS
-    =============================== */
-    res.set({
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename=${
-        invoice.invoiceNumber || "invoice"
-      }.pdf`
-    });
+    invoice.supplier =
+      invoice.supplier || {};
 
-    /* ===============================
-       ✅ PIPE RESPONSE
-    =============================== */
-    stream.pipe(res);
+    invoice.remittance =
+      invoice.remittance || {};
 
-    stream.on("end", () => res.end());
+    invoice.exportDetails =
+      invoice.exportDetails || {};
 
-    stream.on("error", (err) => {
-      console.error("STREAM ERROR:", err);
-      if (!res.headersSent) {
-        res.status(500).json({
-          success: false,
-          message: "PDF generation failed"
-        });
-      }
-    });
+    invoice.lut =
+      invoice.lut || {};
 
-  } catch (err) {
-    console.error("PDF ERROR:", err);
+    invoice.items =
+      invoice.items || [];
 
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
-  }
-};
+    return invoice;
+  };
+
+/* ==================================================
+   GET INVOICE BY NUMBER
+================================================== */
+
+exports.getInvoiceByNumber =
+  async (
+    invoiceNumber
+  ) => {
+    const invoice =
+      await Invoice.findOne({
+        invoiceNumber
+      });
+
+    if (!invoice) {
+      throw new Error(
+        "Invoice not found"
+      );
+    }
+
+    return {
+      success: true,
+      data: invoice
+    };
+  };

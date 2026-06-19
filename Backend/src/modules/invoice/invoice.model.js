@@ -1,204 +1,619 @@
 const mongoose = require("mongoose");
 const Counter = require("./counter.model");
 
-/* =========================================
-   ITEM SUBSCHEMA
-========================================= */
+/* ===================================================
+   ITEM SCHEMA
+=================================================== */
+
 const itemSchema = new mongoose.Schema(
   {
-    description: { type: String, required: true, trim: true },
+    description: {
+      type: String,
+      required: true,
+      trim: true
+    },
 
     hsn: {
       type: String,
-      required: true,
-      trim: true,
-      default: "998313" // IT Services default
+      default: "998313",
+      trim: true
     },
 
-    value: { type: Number, required: true, min: 0 },
-
-    igstRate: {
+    quantity: {
       type: Number,
-      default: 18, // ✅ FIXED GST
+      default: 1,
+      min: 1
+    },
+
+    unitPrice: {
+      type: Number,
+      required: true,
       min: 0
     },
 
-    igstAmount: { type: Number, default: 0 },
-    total: { type: Number, default: 0 }
+    discount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    taxableValue: {
+      type: Number,
+      default: 0
+    },
+
+    cgstRate: {
+      type: Number,
+      default: 9
+    },
+
+    sgstRate: {
+      type: Number,
+      default: 9
+    },
+
+    igstRate: {
+      type: Number,
+      default: 18
+    },
+
+    cgstAmount: {
+      type: Number,
+      default: 0
+    },
+
+    sgstAmount: {
+      type: Number,
+      default: 0
+    },
+
+    igstAmount: {
+      type: Number,
+      default: 0
+    },
+
+    total: {
+      type: Number,
+      default: 0
+    }
   },
   { _id: false }
 );
 
-/* =========================================
-   MAIN SCHEMA
-========================================= */
+/* ===================================================
+   INVOICE SCHEMA
+=================================================== */
+
 const invoiceSchema = new mongoose.Schema(
   {
-    /* ================= CLIENT (OPTIONAL) ================= */
     clientId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Client",
       index: true
     },
 
-    /* ================= INVOICE INFO ================= */
-    invoiceNumber: { type: String, unique: true, index: true },
+    /* =======================
+       INVOICE INFO
+    ======================= */
+
+    invoiceNumber: {
+      type: String,
+      unique: true,
+      index: true
+    },
 
     invoiceDate: {
       type: Date,
       required: true,
-      index: true
+      default: Date.now
     },
 
-    agreementPO: {
-      number: { type: String, trim: true },
-      date: Date
-    },
+    orderDate: Date,
+
+    dueDate: Date,
+
+    purchaseOrderNumber: String,
+
+    purchaseOrderDate: Date,
 
     serviceMode: {
       type: String,
-      default: "Online / ITES"
+      default: "Online / IT Services"
     },
 
-    /* ================= SUPPLIER ================= */
+    /* =======================
+       SUPPLIER
+    ======================= */
+
     supplier: {
-      name: { type: String, required: true },
-      gstin: { type: String, required: true },
-      cin: String,
-      pan: String,
-      iec: String,
-      iecDate: Date,
-      email: String,
-      phone: String
-    },
+      name: {
+        type: String,
+        required: true
+      },
 
-    /* ================= CUSTOMER ================= */
-    customer: {
-      name: { type: String, required: true },
       address: String,
+
+      gstin: {
+        type: String,
+        required: true
+      },
+
+      cin: String,
+
+      pan: String,
+
+      iec: String,
+
       email: String,
-      phone: String
+
+      phone: String,
+
+      website: String
     },
 
-    /* ================= ITEMS ================= */
-    items: {
-      type: [itemSchema],
-      validate: [(val) => val.length > 0, "At least one item required"]
+    /* =======================
+       CUSTOMER
+    ======================= */
+
+    customer: {
+      name: {
+        type: String,
+        required: true
+      },
+
+      gstin: String,
+
+      contactPerson: String,
+
+      email: String,
+
+      phone: String,
+
+      billingAddress: String,
+
+      shippingAddress: String,
+
+      state: String,
+
+      country: {
+        type: String,
+        default: "India"
+      }
     },
 
-    /* ================= TAX SUMMARY ================= */
-    subtotal: { type: Number, default: 0 },
-    totalTax: { type: Number, default: 0 },
-    grandTotal: { type: Number, default: 0 },
+    /* =======================
+       GST TYPE
+    ======================= */
 
-    totalAmount: { type: Number, default: 0 },
+    taxType: {
+      type: String,
+      enum: ["CGST_SGST", "IGST", "EXPORT"],
+      default: "IGST"
+    },
 
-    /* ================= GST ================= */
     placeOfSupply: String,
 
-    /* ================= LUT DETAILS ================= */
-    lut: {
-      type: {
-        type: String,
-        default: "LUT" // or "Export"
-      },
-      arn: String,
-      date: Date
+    /* =======================
+       ITEMS
+    ======================= */
+
+    items: {
+      type: [itemSchema],
+      validate: [
+        (items) => items.length > 0,
+        "At least one item is required"
+      ]
     },
 
-    /* ================= PAYMENT ================= */
+    /* =======================
+       TOTALS
+    ======================= */
+
+    subtotal: {
+      type: Number,
+      default: 0
+    },
+
+    discountAmount: {
+      type: Number,
+      default: 0
+    },
+
+    cgstTotal: {
+      type: Number,
+      default: 0
+    },
+
+    sgstTotal: {
+      type: Number,
+      default: 0
+    },
+
+    igstTotal: {
+      type: Number,
+      default: 0
+    },
+
+    otherCharges: {
+      type: Number,
+      default: 0
+    },
+
+    tdsAmount: {
+      type: Number,
+      default: 0
+    },
+
+    grandTotal: {
+      type: Number,
+      default: 0
+    },
+
+    totalAmount: {
+      type: Number,
+      default: 0
+    },
+
+    /* =======================
+       PAYMENT
+    ======================= */
+
     paymentTerms: {
       type: String,
       default: "Due on Receipt"
     },
 
-    /* ================= BANK DETAILS ================= */
+    paymentStatus: {
+      type: String,
+      enum: [
+        "Draft",
+        "Pending",
+        "Partially Paid",
+        "Paid",
+        "Overdue",
+        "Cancelled"
+      ],
+      default: "Pending"
+    },
+
+    paymentDate: Date,
+
+    /* =======================
+       CURRENCY
+    ======================= */
+
+    currency: {
+      type: String,
+      default: "INR"
+    },
+
+    exchangeRate: {
+      type: Number,
+      default: 1
+    },
+
+    /* =======================
+       LUT / EXPORT
+    ======================= */
+
+    lut: {
+      arn: String,
+      date: Date
+    },
+
+    exportDetails: {
+      isExport: {
+        type: Boolean,
+        default: false
+      },
+
+      country: String,
+
+      portCode: String,
+
+      shippingBillNumber: String,
+
+      shippingBillDate: Date
+    },
+
+    /* =======================
+       BANK DETAILS
+    ======================= */
+
     remittance: {
       beneficiaryName: String,
+
       accountNumber: String,
+
+      bankName: String,
+
+      branchName: String,
+
       swiftCode: String,
+
       ifscCode: String,
+
       bankAddress: String
     },
 
-    /* ================= EXTRA ================= */
-    amountInWords: String,
+    /* =======================
+       SIGNATURE
+    ======================= */
 
-    companyDisplayName: String, // For signature block
+    companyDisplayName: String,
 
     authorisedSignatory: String,
 
+    digitalSignatureUrl: String,
+
+    /* =======================
+       EXTRA
+    ======================= */
+
+    amountInWords: String,
+
+    notes: String,
+
+    termsAndConditions: {
+      type: String,
+      default:
+        "Payment due within agreed terms. Late payments may attract additional charges."
+    },
+
     remark: String
   },
-  { timestamps: true }
+  {
+    timestamps: true
+  }
 );
 
-/* =========================================
-   PRE-SAVE: CALCULATE TOTALS
-========================================= */
+/* ===================================================
+   CALCULATE TOTALS
+=================================================== */
+
 invoiceSchema.pre("save", function (next) {
-  let subtotal = 0;
-  let totalTax = 0;
+  try {
+    let subtotal = 0;
+    let discountAmount = 0;
 
-  this.items = this.items.map((item) => {
-    const value = Number(item.value || 0);
-    const rate = Number(item.igstRate ?? 18);
+    let cgstTotal = 0;
+    let sgstTotal = 0;
+    let igstTotal = 0;
 
-    const igstAmount = Number(((value * rate) / 100).toFixed(2));
-    const totalItem = Number((value + igstAmount).toFixed(2));
+    if (!Array.isArray(this.items)) {
+      this.items = [];
+    }
 
-    subtotal += value;
-    totalTax += igstAmount;
+    this.items.forEach((item) => {
+      const qty = Math.max(1, Number(item.quantity || 1));
 
-    return {
-      ...item,
-      igstAmount,
-      total: totalItem
-    };
-  });
+      const unitPrice = Math.max(
+        0,
+        Number(item.unitPrice || 0)
+      );
 
-  this.subtotal = Number(subtotal.toFixed(2));
-  this.totalTax = Number(totalTax.toFixed(2));
-  this.grandTotal = Number((subtotal + totalTax).toFixed(2));
-  this.totalAmount = this.grandTotal;
+      const discount = Math.max(
+        0,
+        Number(item.discount || 0)
+      );
 
-  next();
+      /* -------------------------
+         TAXABLE VALUE
+      ------------------------- */
+
+      const grossAmount = qty * unitPrice;
+
+      const taxableValue = Math.max(
+        0,
+        grossAmount - discount
+      );
+
+      /* -------------------------
+         GST
+      ------------------------- */
+
+      let cgstAmount = 0;
+      let sgstAmount = 0;
+      let igstAmount = 0;
+
+      if (this.taxType === "CGST_SGST") {
+        cgstAmount =
+          (taxableValue *
+            Number(item.cgstRate || 9)) /
+          100;
+
+        sgstAmount =
+          (taxableValue *
+            Number(item.sgstRate || 9)) /
+          100;
+      }
+
+      else if (this.taxType === "IGST") {
+        igstAmount =
+          (taxableValue *
+            Number(item.igstRate || 18)) /
+          100;
+      }
+
+      /* EXPORT WITH LUT */
+      else if (this.taxType === "EXPORT") {
+        cgstAmount = 0;
+        sgstAmount = 0;
+        igstAmount = 0;
+      }
+
+      /* -------------------------
+         ITEM TOTAL
+      ------------------------- */
+
+      const itemTotal =
+        taxableValue +
+        cgstAmount +
+        sgstAmount +
+        igstAmount;
+
+      /* -------------------------
+         SAVE ITEM VALUES
+      ------------------------- */
+
+      item.taxableValue = Number(
+        taxableValue.toFixed(2)
+      );
+
+      item.cgstAmount = Number(
+        cgstAmount.toFixed(2)
+      );
+
+      item.sgstAmount = Number(
+        sgstAmount.toFixed(2)
+      );
+
+      item.igstAmount = Number(
+        igstAmount.toFixed(2)
+      );
+
+      item.total = Number(
+        itemTotal.toFixed(2)
+      );
+
+      /* -------------------------
+         ACCUMULATE TOTALS
+      ------------------------- */
+
+      subtotal += taxableValue;
+      discountAmount += discount;
+
+      cgstTotal += cgstAmount;
+      sgstTotal += sgstAmount;
+      igstTotal += igstAmount;
+    });
+
+    /* -------------------------
+       ROUND TOTALS
+    ------------------------- */
+
+    subtotal = Number(
+      subtotal.toFixed(2)
+    );
+
+    discountAmount = Number(
+      discountAmount.toFixed(2)
+    );
+
+    cgstTotal = Number(
+      cgstTotal.toFixed(2)
+    );
+
+    sgstTotal = Number(
+      sgstTotal.toFixed(2)
+    );
+
+    igstTotal = Number(
+      igstTotal.toFixed(2)
+    );
+
+    const otherCharges = Number(
+      this.otherCharges || 0
+    );
+
+    const tdsAmount = Number(
+      this.tdsAmount || 0
+    );
+
+    /* -------------------------
+       GRAND TOTAL
+    ------------------------- */
+
+    const grandTotal =
+      subtotal +
+      cgstTotal +
+      sgstTotal +
+      igstTotal +
+      otherCharges -
+      tdsAmount;
+
+    /* -------------------------
+       SAVE INVOICE TOTALS
+    ------------------------- */
+
+    this.subtotal = subtotal;
+
+    this.discountAmount =
+      discountAmount;
+
+    this.cgstTotal = cgstTotal;
+
+    this.sgstTotal = sgstTotal;
+
+    this.igstTotal = igstTotal;
+
+    this.grandTotal = Number(
+      grandTotal.toFixed(2)
+    );
+
+    this.totalAmount =
+      this.grandTotal;
+
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
+/* ===================================================
+   AUTO INVOICE NUMBER
+=================================================== */
 
-/* =========================================
-   PRE-SAVE: AUTO INVOICE NUMBER
-========================================= */
 invoiceSchema.pre("save", async function (next) {
   if (!this.invoiceNumber) {
     const year = new Date().getFullYear();
 
     const counter = await Counter.findOneAndUpdate(
-      { key: `invoice_${year}` },
-      { $inc: { value: 1 } },
-      { new: true, upsert: true }
+      {
+        key: `invoice_${year}`
+      },
+      {
+        $inc: { value: 1 }
+      },
+      {
+        new: true,
+        upsert: true
+      }
     );
 
-    this.invoiceNumber = `INV-${year}-${String(counter.value).padStart(4, "0")}`;
+    this.invoiceNumber =
+      `INV-${year}-${String(counter.value).padStart(5, "0")}`;
   }
 
   next();
 });
 
-/* =========================================
+/* ===================================================
    STATIC METHODS
-========================================= */
-invoiceSchema.statics.findByInvoiceNumber = function (invoiceNumber) {
-  return this.findOne({ invoiceNumber });
-};
+=================================================== */
 
-/* =========================================
-   INDEXES (PERFORMANCE)
-========================================= */
+invoiceSchema.statics.findByInvoiceNumber =
+  function (invoiceNumber) {
+    return this.findOne({
+      invoiceNumber
+    });
+  };
+
+/* ===================================================
+   INDEXES
+=================================================== */
+
 invoiceSchema.index({ createdAt: -1 });
 invoiceSchema.index({ invoiceNumber: 1 });
+invoiceSchema.index({ invoiceDate: -1 });
+invoiceSchema.index({ paymentStatus: 1 });
 invoiceSchema.index({ "customer.name": 1 });
+invoiceSchema.index({ clientId: 1 });
 
-/* =========================================
+/* ===================================================
    EXPORT
-========================================= */
-module.exports = mongoose.model("Invoice", invoiceSchema);
+=================================================== */
+
+module.exports = mongoose.model(
+  "Invoice",
+  invoiceSchema
+);
