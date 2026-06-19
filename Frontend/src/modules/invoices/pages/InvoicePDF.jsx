@@ -10,6 +10,38 @@ const formatCurrency = (v) =>
   `Rs. ${safe(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const styles = StyleSheet.create({
+
+  sectionTitle: {
+  fontSize: 11,
+  fontWeight: "bold",
+  color: "#1e40af",
+  marginBottom: 6
+},
+
+infoGrid: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  marginBottom: 15,
+  border: "1px solid #d1d5db",
+  padding: 10
+},
+
+infoItem: {
+  width: "24%"
+},
+
+signature: {
+  marginTop: 30,
+  alignItems: "flex-end"
+},
+
+amountWords: {
+  marginTop: 12,
+  padding: 10,
+  backgroundColor: "#f8fafc",
+  border: "1px solid #d1d5db"
+}
+,
   page: {
     padding: 30,
     fontSize: 10,
@@ -137,121 +169,473 @@ export default function InvoicePDF({ invoice }) {
   const supplier = invoice.supplier || {};
   const remittance = invoice.remittance || {};
 
-  let calcSubtotal = 0,
-    calcTax = 0;
-  items.forEach((i) => {
-    calcSubtotal += safe(i.value);
-    calcTax += safe(i.igstAmount);
-  });
+ let calcSubtotal = 0;
+
+items.forEach((i) => {
+  calcSubtotal += safe(
+    i.taxableValue
+  );
+});
 
   const subtotal = safe(invoice.subtotal ?? calcSubtotal);
-  const tax = safe(invoice.totalTax ?? calcTax);
+  const tax =
+  safe(invoice.cgstTotal) +
+  safe(invoice.sgstTotal) +
+  safe(invoice.igstTotal);
   const grandTotal = safe(invoice.grandTotal ?? invoice.totalAmount ?? subtotal + tax);
 
-  return (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        {/* HEADER */}
-        <View style={styles.header}>
-          <Text style={styles.title}>TAX INVOICE</Text>
-          <Text style={styles.company}>{supplier.name || ""}</Text>
+ return (
+  <Document>
+    <Page size="A4" style={styles.page}>
+
+      {/* COMPANY HEADER */}
+      <View
+        style={{
+          backgroundColor: "#1e40af",
+          padding: 16,
+          borderRadius: 8,
+          marginBottom: 15,
+        }}
+      >
+        <Text
+          style={{
+            color: "#fff",
+            fontSize: 22,
+            fontWeight: "bold",
+            textAlign: "center",
+          }}
+        >
+          {invoice.companyDisplayName || supplier.name}
+        </Text>
+
+        <Text
+          style={{
+            color: "#dbeafe",
+            textAlign: "center",
+            marginTop: 4,
+          }}
+        >
+          TAX INVOICE
+        </Text>
+      </View>
+
+      {/* INVOICE INFO */}
+      <View style={styles.row}>
+
+        <View style={styles.card}>
+          <Text style={styles.bold}>Invoice Details</Text>
+
+          <Text>
+            Invoice No :
+            {" "}
+            {invoice.invoiceNumber}
+          </Text>
+
+          <Text>
+            Invoice Date :
+            {" "}
+            {invoice.invoiceDate
+              ? new Date(
+                  invoice.invoiceDate
+                ).toLocaleDateString("en-IN")
+              : "-"}
+          </Text>
+
+          <Text>
+            Due Date :
+            {" "}
+            {invoice.dueDate
+              ? new Date(
+                  invoice.dueDate
+                ).toLocaleDateString("en-IN")
+              : "-"}
+          </Text>
+
+          <Text>
+            PO Number :
+            {" "}
+            {invoice.purchaseOrderNumber || "-"}
+          </Text>
+
+          <Text>
+            PO Date :
+            {" "}
+            {invoice.purchaseOrderDate
+              ? new Date(
+                  invoice.purchaseOrderDate
+                ).toLocaleDateString("en-IN")
+              : "-"}
+          </Text>
+
+          <Text>
+            Tax Type :
+            {" "}
+            {invoice.taxType || "-"}
+          </Text>
+
+          <Text>
+            Payment Status :
+            {" "}
+            {invoice.paymentStatus || "-"}
+          </Text>
         </View>
 
-        {/* Supplier & Invoice Details */}
-        <View style={styles.row}>
-          <View style={styles.card}>
-            <Text style={styles.bold}>Supplier</Text>
-            <Text style={styles.value}>{supplier.name || ""}</Text>
-            {supplier.gstin && <Text style={styles.label}>GSTIN: {supplier.gstin}</Text>}
-            {supplier.pan && <Text style={styles.label}>PAN: {supplier.pan}</Text>}
-            {supplier.phone && <Text style={styles.label}>Phone: {supplier.phone}</Text>}
-            {supplier.email && <Text style={styles.label}>Email: {supplier.email}</Text>}
-          </View>
+        <View style={styles.card}>
+          <Text style={styles.bold}>Supplier Details</Text>
 
-          <View style={styles.card}>
-            <Text style={styles.bold}>Invoice Details</Text>
-            <Text style={styles.value}>No: {invoice.invoiceNumber || ""}</Text>
-            {invoice.invoiceDate && (
-              <Text style={styles.label}>Date: {new Date(invoice.invoiceDate).toLocaleDateString("en-IN")}</Text>
+          <Text>{supplier.name}</Text>
+
+          <Text>{supplier.address}</Text>
+
+          <Text>
+            GSTIN :
+            {" "}
+            {supplier.gstin}
+          </Text>
+
+          <Text>
+            PAN :
+            {" "}
+            {supplier.pan}
+          </Text>
+
+          <Text>
+            Phone :
+            {" "}
+            {supplier.phone}
+          </Text>
+
+          <Text>
+            Email :
+            {" "}
+            {supplier.email}
+          </Text>
+        </View>
+
+      </View>
+
+      {/* CUSTOMER */}
+      <View style={styles.fullCard}>
+        <Text style={styles.bold}>
+          Customer Details
+        </Text>
+
+        <Text>
+          {customer.name}
+        </Text>
+
+        <Text>
+          GSTIN :
+          {" "}
+          {customer.gstin || "-"}
+        </Text>
+
+        <Text>
+          Email :
+          {" "}
+          {customer.email}
+        </Text>
+
+        <Text>
+          Phone :
+          {" "}
+          {customer.phone}
+        </Text>
+
+        <Text>
+          Billing :
+          {" "}
+          {customer.billingAddress}
+        </Text>
+
+        <Text>
+          Shipping :
+          {" "}
+          {customer.shippingAddress}
+        </Text>
+      </View>
+
+      {/* ITEMS TABLE */}
+      <View style={styles.table}>
+
+        <View
+          style={[
+            styles.tableHeader,
+            {
+              backgroundColor: "#1e40af",
+            },
+          ]}
+        >
+          <Text style={{ width: "5%" }}>#</Text>
+          <Text style={{ width: "22%" }}>
+            Description
+          </Text>
+          <Text style={{ width: "10%" }}>
+            HSN
+          </Text>
+          <Text style={{ width: "8%" }}>
+            Qty
+          </Text>
+          <Text style={{ width: "12%" }}>
+            Rate
+          </Text>
+          <Text style={{ width: "10%" }}>
+            Disc
+          </Text>
+          <Text style={{ width: "13%" }}>
+            Taxable
+          </Text>
+          <Text style={{ width: "8%" }}>
+            GST
+          </Text>
+          <Text style={{ width: "12%" }}>
+            Total
+          </Text>
+        </View>
+
+        {items.map((item, index) => (
+          <View
+            key={index}
+            style={styles.tableRow}
+          >
+            <Text style={{ width: "5%" }}>
+              {index + 1}
+            </Text>
+
+            <Text style={{ width: "22%" }}>
+              {item.description}
+            </Text>
+
+            <Text style={{ width: "10%" }}>
+              {item.hsn}
+            </Text>
+
+            <Text style={{ width: "8%" }}>
+              {item.quantity}
+            </Text>
+
+            <Text style={{ width: "12%" }}>
+              {formatCurrency(
+                item.unitPrice
+              )}
+            </Text>
+
+            <Text style={{ width: "10%" }}>
+              {formatCurrency(
+                item.discount
+              )}
+            </Text>
+
+            <Text style={{ width: "13%" }}>
+              {formatCurrency(
+                item.taxableValue
+              )}
+            </Text>
+
+            <Text style={{ width: "8%" }}>
+              {item.igstRate}%
+            </Text>
+
+            <Text style={{ width: "12%" }}>
+              {formatCurrency(
+                item.total
+              )}
+            </Text>
+          </View>
+        ))}
+
+      </View>
+
+      {/* TOTALS */}
+      <View
+        style={{
+          marginTop: 20,
+          marginLeft: "50%",
+          border: "1px solid #d1d5db",
+          padding: 10,
+        }}
+      >
+
+        <View style={styles.totalRow}>
+          <Text>Subtotal</Text>
+          <Text>
+            {formatCurrency(
+              invoice.subtotal
             )}
-            {invoice.agreementPO?.number && <Text style={styles.label}>PO: {invoice.agreementPO.number}</Text>}
-          </View>
+          </Text>
         </View>
 
-        {/* Customer */}
-        <View style={styles.fullCard}>
-          <Text style={styles.bold}>Bill To</Text>
-          <Text style={styles.value}>{customer.name || ""}</Text>
-          <Text style={styles.label}>{customer.address || ""}</Text>
-          <Text style={styles.label}>Phone: {customer.phone || ""}</Text>
-          <Text style={styles.label}>Email: {customer.email || ""}</Text>
+        <View style={styles.totalRow}>
+          <Text>CGST</Text>
+          <Text>
+            {formatCurrency(
+              invoice.cgstTotal
+            )}
+          </Text>
         </View>
 
-        {/* Items Table */}
-        <View style={styles.table}>
-          <View style={styles.tableHeader}>
-            <Text style={styles.col1}>#</Text>
-            <Text style={styles.col2}>Description</Text>
-            <Text style={styles.col3}>HSN</Text>
-            <Text style={styles.col4}>Value</Text>
-            <Text style={styles.col5}>GST%</Text>
-            <Text style={styles.col6}>Tax</Text>
-            <Text style={styles.col7}>Total</Text>
-          </View>
-          {items.map((i, idx) => (
-            <View key={idx} style={styles.tableRow}>
-              <Text style={styles.col1}>{idx + 1}</Text>
-              <Text style={styles.col2}>{i.description || ""}</Text>
-              <Text style={styles.col3}>{i.hsn || ""}</Text>
-              <Text style={styles.col4}>{formatCurrency(i.value)}</Text>
-              <Text style={styles.col5}>{safe(i.igstRate)}%</Text>
-              <Text style={styles.col6}>{formatCurrency(i.igstAmount)}</Text>
-              <Text style={styles.col7}>{formatCurrency(i.total)}</Text>
-            </View>
-          ))}
+        <View style={styles.totalRow}>
+          <Text>SGST</Text>
+          <Text>
+            {formatCurrency(
+              invoice.sgstTotal
+            )}
+          </Text>
         </View>
 
-        {/* Totals */}
-        <View style={styles.totals}>
-          <View style={styles.totalRow}>
-            <Text>Subtotal</Text>
-            <Text>{formatCurrency(subtotal)}</Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text>Tax</Text>
-            <Text>{formatCurrency(tax)}</Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={styles.grand}>Grand Total</Text>
-            <Text style={styles.grand}>{formatCurrency(grandTotal)}</Text>
-          </View>
+        <View style={styles.totalRow}>
+          <Text>IGST</Text>
+          <Text>
+            {formatCurrency(
+              invoice.igstTotal
+            )}
+          </Text>
         </View>
 
-        {/* Remittance */}
-        <View style={styles.fullCard}>
-          <Text style={styles.remittanceTitle}>Remittance / Bank Details</Text>
-          <View style={styles.remittanceRow}>
-            <Text>Beneficiary:</Text>
-            <Text>{remittance.beneficiaryName || ""}</Text>
-          </View>
-          <View style={styles.remittanceRow}>
-            <Text>Account No:</Text>
-            <Text>{remittance.accountNumber || ""}</Text>
-          </View>
-          <View style={styles.remittanceRow}>
-            <Text>IFSC:</Text>
-            <Text>{remittance.ifscCode || ""}</Text>
-          </View>
-          <View style={styles.remittanceRow}>
-            <Text>SWIFT:</Text>
-            <Text>{remittance.swiftCode || ""}</Text>
-          </View>
-          <View style={styles.remittanceRow}>
-            <Text>Bank Address:</Text>
-            <Text>{remittance.bankAddress || ""}</Text>
-          </View>
+        <View style={styles.totalRow}>
+          <Text>Other Charges</Text>
+          <Text>
+            {formatCurrency(
+              invoice.otherCharges
+            )}
+          </Text>
         </View>
-      </Page>
-    </Document>
-  );
-}
+
+        <View style={styles.totalRow}>
+          <Text>TDS</Text>
+          <Text>
+            {formatCurrency(
+              invoice.tdsAmount
+            )}
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.totalRow,
+            {
+              borderTop:
+                "1px solid #000",
+              paddingTop: 5,
+            },
+          ]}
+        >
+          <Text
+            style={{
+              fontWeight: "bold",
+            }}
+          >
+            Grand Total
+          </Text>
+
+          <Text
+            style={{
+              fontWeight: "bold",
+              color: "#1e40af",
+            }}
+          >
+            {formatCurrency(
+              invoice.grandTotal
+            )}
+          </Text>
+        </View>
+
+      </View>
+
+      {/* AMOUNT IN WORDS */}
+      <View style={styles.fullCard}>
+        <Text style={styles.bold}>
+          Amount In Words
+        </Text>
+
+        <Text>
+          {invoice.amountInWords ||
+            "-"}
+        </Text>
+      </View>
+
+      {/* BANK DETAILS */}
+      <View style={styles.fullCard}>
+        <Text
+          style={{
+            fontWeight: "bold",
+            marginBottom: 6,
+          }}
+        >
+          Bank / Remittance Details
+        </Text>
+
+        <Text>
+          Beneficiary :
+          {" "}
+          {remittance.beneficiaryName}
+        </Text>
+
+        <Text>
+          Bank :
+          {" "}
+          {remittance.bankName}
+        </Text>
+
+        <Text>
+          Account :
+          {" "}
+          {remittance.accountNumber}
+        </Text>
+
+        <Text>
+          IFSC :
+          {" "}
+          {remittance.ifscCode}
+        </Text>
+
+        <Text>
+          SWIFT :
+          {" "}
+          {remittance.swiftCode}
+        </Text>
+      </View>
+
+      {/* TERMS */}
+      <View style={styles.fullCard}>
+        <Text style={styles.bold}>
+          Terms & Conditions
+        </Text>
+
+        <Text>
+          {invoice.termsAndConditions}
+        </Text>
+      </View>
+
+      {/* SIGNATURE */}
+      <View
+        style={{
+          marginTop: 30,
+          alignItems: "flex-end",
+        }}
+      >
+        <Text>
+          For
+          {" "}
+          {invoice.companyDisplayName}
+        </Text>
+
+        <Text
+          style={{
+            marginTop: 30,
+            fontWeight: "bold",
+          }}
+        >
+          {invoice.authorisedSignatory}
+        </Text>
+
+        <Text>
+          Authorized Signatory
+        </Text>
+      </View>
+
+    </Page>
+  </Document>
+);  
+
+};

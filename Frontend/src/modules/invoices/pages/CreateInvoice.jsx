@@ -39,13 +39,13 @@ const [form, setForm] = useState({
   paymentStatus: "Pending",
 
   supplier: {
-    name: "Ready Tech Solutions",
-    address: "Tamil Nadu, India",
-    gstin: "",
-    pan: "",
-    email: "",
-    phone: ""
-  },
+  name: "Ready Tech Solutions",
+  address: "Tamil Nadu, India",
+  gstin: "33ABCDE1234F1Z5",
+  pan: "ABCDE1234F",
+  email: "info@readytechsolutions.com",
+  phone: "+91 9876543210"
+},
 
   customer: {
     name: "",
@@ -330,95 +330,116 @@ const summary = useMemo(() => {
 const totalAmount = summary.grandTotal;
 
   // ================= CREATE INVOICE =================
-  const createInvoice =
-  async () => {
-    try {
-      if (!form.invoiceDate)
-        return alert(
-          "Invoice Date required"
-        );
+const createInvoice = async () => {
+  try {
+    if (!form.invoiceDate) {
+      return alert("Invoice Date required");
+    }
 
-      if (
-        !form.customer.name
+    if (!form.customer?.name) {
+      return alert("Customer required");
+    }
+
+    if (!form.items?.length) {
+      return alert("Add at least one item");
+    }
+
+    const payload = {
+  ...form,
+  clientId: form.clientId || undefined,
+
+      subtotal: Number(summary.subtotal || 0),
+      discountAmount: Number(summary.discount || 0),
+
+      cgstTotal: Number(summary.cgst || 0),
+      sgstTotal: Number(summary.sgst || 0),
+      igstTotal: Number(summary.igst || 0),
+
+      grandTotal: Number(summary.grandTotal || 0),
+      totalAmount: Number(summary.grandTotal || 0)
+    };
+
+    console.log(
+      "=============================="
+    );
+
+    console.log(
+      "INVOICE PAYLOAD"
+    );
+
+    console.log(
+      JSON.stringify(
+        payload,
+        null,
+        2
       )
-        return alert(
-          "Customer required"
-        );
+    );
 
-      if (
-        form.items.length === 0
-      )
-        return alert(
-          "Add at least one item"
-        );
+    console.log(
+      "=============================="
+    );
 
-      const payload = {
-        ...form,
+    const res = await API.post(
+      "/invoices",
+      payload
+    );
 
-        subtotal:
-          summary.subtotal,
+    console.log(
+      "CREATE RESPONSE",
+      res.data
+    );
 
-        discountAmount:
-          summary.discount,
+    if (res.data?.success) {
+      const invoice =
+        res.data.data;
 
-        cgstTotal:
-          summary.cgst,
+      setInvoiceId(
+        invoice._id
+      );
 
-        sgstTotal:
-          summary.sgst,
+      setInvoiceNumber(
+        invoice.invoiceNumber
+      );
 
-        igstTotal:
-          summary.igst,
-
-        grandTotal:
-          summary.grandTotal,
-
-        totalAmount:
-          summary.grandTotal
-      };
-
-      const res =
-        await API.post(
-          "/invoices",
-          payload
-        );
-
-      if (
-        res.data.success
-      ) {
-        const invoice =
-          res.data.data;
-
-        setInvoiceId(
-          invoice._id
-        );
-
-        setInvoiceNumber(
-          invoice.invoiceNumber
-        );
-
-        setCreatedInvoice(
-          invoice
-        );
-
-        alert(
-          `Invoice Created : ${invoice.invoiceNumber}`
-        );
-
-        onInvoiceCreated?.(
-          invoice
-        );
-      }
-    } catch (err) {
-      console.error(err);
+      setCreatedInvoice(
+        invoice
+      );
 
       alert(
-        err?.response?.data
-          ?.message ||
-          "Invoice creation failed"
+        `Invoice Created : ${invoice.invoiceNumber}`
+      );
+
+      onInvoiceCreated?.(
+        invoice
       );
     }
-  };
+  } catch (err) {
+    console.error(
+      "FULL ERROR =>",
+      err
+    );
+
+    console.error(
+      "SERVER RESPONSE =>",
+      err?.response?.data
+    );
+
+    console.error(
+      "STATUS =>",
+      err?.response?.status
+    );
+
+    alert(
+      err?.response?.data?.message ||
+      JSON.stringify(
+        err?.response?.data,
+        null,
+        2
+      ) ||
+      "Invoice creation failed"
+    );
+  }
+};
 
   // ================= PDF =================
   const downloadPDF =

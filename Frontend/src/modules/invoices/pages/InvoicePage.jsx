@@ -71,21 +71,39 @@ setLatest(data.slice(0, 3));
   }, [search]);
 
   /* ================= STATS ================= */
-  const stats = useMemo(() => {
-    const total = invoices.length;
-    const paidInvoices = invoices.filter(i => i.status === "paid");
-    const pendingInvoices = invoices.filter(
-      i => ["draft", "sent", "pending"].includes(i.status)
-    );
-    const revenue = paidInvoices.reduce((sum, i) => sum + (i.grandTotal || 0), 0);
+const stats = useMemo(() => {
+  const total = invoices.length;
 
-    return {
-      total,
-      paid: paidInvoices.length,
-      pending: pendingInvoices.length,
-      revenue
-    };
-  }, [invoices]);
+  const paidInvoices = invoices.filter(
+    (invoice) =>
+      invoice.paymentStatus?.toLowerCase() ===
+      "paid"
+  );
+
+  const pendingInvoices = invoices.filter(
+    (invoice) =>
+      invoice.paymentStatus?.toLowerCase() !==
+      "paid"
+  );
+
+  const revenue = paidInvoices.reduce(
+    (sum, invoice) =>
+      sum +
+      Number(
+        invoice.grandTotal ||
+          invoice.totalAmount ||
+          0
+      ),
+    0
+  );
+
+  return {
+    total,
+    paid: paidInvoices.length,
+    pending: pendingInvoices.length,
+    revenue,
+  };
+}, [invoices]);
 
   /* ================= DELETE ================= */
   const deleteInvoice = async id => {
@@ -101,15 +119,47 @@ setLatest(data.slice(0, 3));
   };
 
   /* ================= STATUS UPDATE ================= */
-  const updateStatus = async (id, status) => {
-    try {
-      await API.patch(`/invoices/${id}/status`, { status });
-      fetchInvoices();
-    } catch (err) {
-      console.error("Status update failed:", err);
-      alert("Status update failed");
+const updateStatus = async (id, paymentStatus) => {
+  try {
+    if (!id) {
+      alert("Invoice ID not found");
+      return;
     }
-  };
+
+    console.log("Updating Invoice:", id);
+    console.log("New Status:", paymentStatus);
+
+    const res = await API.patch(
+      `/invoices/${id}/payment-status`,
+      {
+        paymentStatus,
+      }
+    );
+
+    if (res.data?.success) {
+      fetchInvoices();
+
+      alert(
+        `Invoice status updated to ${paymentStatus}`
+      );
+    }
+  } catch (err) {
+    console.error(
+      "Status update failed:",
+      err
+    );
+
+    console.error(
+      "Server Response:",
+      err?.response?.data
+    );
+
+    alert(
+      err?.response?.data?.message ||
+        "Failed to update payment status"
+    );
+  }
+};
 
   /* ================= VIEW ================= */
   const viewInvoice = id => {
@@ -465,13 +515,13 @@ className="px-2 py-1 text-sm bg-gray-800 rounded"
 
 <td className="flex items-center gap-3 p-4">
 
-<button
+{/* <button
 onClick={() => viewInvoice(inv._id)}
 title="View Invoice"
 className="text-blue-400 transition hover:text-blue-300"
 >
 <Eye size={18}/>
-</button>
+</button> */}
 
 <button
 onClick={()=>downloadPDF(inv)}
